@@ -900,11 +900,22 @@ BR.Input = {
   },
 
   LABELS: {
+    /* The one seat that had no label — because labels were only ever drawn in
+       split screen, so the SOLO player, who is the one most likely to be seeing
+       this game for the first time, was told nothing at all.
+
+       Its bindings are NOT p1's: solo drifts on Space and boosts on Shift,
+       where p1 drifts on R-Shift and boosts on Enter. Borrowing p1's label
+       would have taught the wrong keys, which is worse than silence. */
+    solo: '← →  or  A D   ·   SPACE drift   ·   SHIFT boost   ·   E item',
     p1: '← →  ·  R-SHIFT drift  ·  ENTER boost',
     p2: 'A  D  ·  L-SHIFT drift  ·  SPACE boost',
     p3: 'J  L  ·  U drift  ·  O boost',
     p4: 'F  H  ·  R drift  ·  Y boost',
   },
+
+  /* Same line for a pad, wherever a keyboard label would be shown. */
+  PAD_LABEL: 'GAMEPAD   ·   stick   ·   A drift   ·   X boost',
 
   /* Profile order is also seating order, left to right across the keyboard. */
   PROFILE_ORDER: ['p2', 'p4', 'p3', 'p1'],
@@ -8403,9 +8414,20 @@ BR.HUD = {
       ctx.fillStyle = 'rgba(255,255,255,0.4)';
       // A seat on a pad should not be told to press Left Shift.
       const onPad = BR.Input.padFor(view.seat || 0);
-      ctx.fillText(onPad ? 'GAMEPAD  ·  stick  ·  A drift  ·  X boost'
-                         : (view.controls || ''), w / 2, h - 20);
+      ctx.fillText(onPad ? BR.Input.PAD_LABEL : (view.controls || ''),
+                   w / 2, h - 20);
       ctx.textAlign = 'left';
+    } else {
+      /* SOLO. The controls were drawn only in split screen, so the player most
+         likely to be new to the game was the only one never told which keys
+         drive the car.
+
+         Shown across the countdown and faded out as the lights go out. The
+         countdown is dead time — nothing else is on the lower screen and you
+         cannot drive yet — so it costs a returning player nothing and is gone
+         before the first corner. 11_UI.md: instruction is an aid, never a gate;
+         a player who ignores it must still be able to finish the race. */
+      this.drawSoloControls(ctx, RM, w, h);
     }
 
     ctx.restore();
@@ -8503,6 +8525,51 @@ BR.HUD = {
       ctx.fillText('BEST ' + RM.formatTime(me.bestLap), w / 2, 60);
       ctx.textAlign = 'left';
     }
+  },
+
+  /* How long the solo control line lingers after the lights go out. Long
+     enough to still be readable while the car pulls away, short enough to be
+     gone before anything is being asked of it. */
+  SOLO_HINT_FADE: 2.2,
+
+  drawSoloControls(ctx, RM, w, h) {
+    if (!RM || !RM.STATE) return;
+
+    let a;
+    if (RM.state === RM.STATE.COUNTDOWN) {
+      a = 1;
+    } else if (RM.state === RM.STATE.RACING) {
+      // `clock` only starts advancing when the lights go out, which is exactly
+      // the zero this wants. (Not `raceTime` — there is no such field, and
+      // reading one would leave the hint on screen for the whole race.)
+      const t = RM.clock || 0;
+      if (t > this.SOLO_HINT_FADE) return;
+      a = 1 - t / this.SOLO_HINT_FADE;
+    } else {
+      return;                      // finished, paused — nothing to teach
+    }
+
+    const onPad = BR.Input.padFor(0);
+    const text = onPad ? BR.Input.PAD_LABEL : BR.Input.LABELS.solo;
+    if (!text) return;
+
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.textAlign = 'center';
+    ctx.font = '600 11px ui-monospace, Consolas, monospace';
+
+    // A plate behind it, because this sits over moving track and the line is
+    // unreadable against a pale rug without one.
+    const pad = 14;
+    const tw = ctx.measureText(text).width;
+    ctx.fillStyle = 'rgba(10,8,7,0.55)';
+    this.roundRect(ctx, (w - tw) / 2 - pad, h - 40, tw + pad * 2, 24, 8);
+    ctx.fill();
+
+    ctx.fillStyle = 'rgba(255,255,255,0.72)';
+    ctx.fillText(text, w / 2, h - 24);
+    ctx.textAlign = 'left';
+    ctx.restore();
   },
 
   drawCountdown(ctx, RM, w, h) {
@@ -9594,6 +9661,20 @@ BR.Screens = {
     ctx.fillText(P.stars() + ' / ' + P.maxStars() + ' STARS   ·   ' +
                  P.piecesFound().length + ' / ' + P.piecesTotal() + ' TOY PIECES',
                  cx, h * 0.22 + 82);
+
+    /* The controls, on the front page. In-race the hint fades after a couple of
+       seconds, which is right for a countdown and useless to somebody who has
+       already forgotten which key drifts — so they are also somewhere you can
+       go and look, without a screen to open or a menu to find.
+
+       Multi-player seats are told their own keys under their own half of the
+       split screen, so this shows the one-player scheme it belongs to. */
+    if (BR.Game.players === 1) {
+      ctx.font = '600 10px ui-monospace, Consolas, monospace';
+      ctx.fillStyle = 'rgba(255,255,255,0.34)';
+      ctx.fillText(BR.Input.padFor(0) ? BR.Input.PAD_LABEL : BR.Input.LABELS.solo,
+                   cx, h * 0.22 + 104);
+    }
     ctx.textAlign = 'left';
 
     const bw = 240, bx = cx - bw / 2;
