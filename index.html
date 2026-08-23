@@ -447,6 +447,37 @@ BR.PHYSICS = {
   boostMinToFire:   0.15,   // meter needed to trigger. Stops useless dribbles.
                             // NOT in the bible — added in Phase 1
 
+  /* ── MAGNETIC BOOSTERS ───────────────────────────────────────────────────
+     A booster is a rail (Rails.js), not a pad: it grabs the car, pulls it onto
+     its groove, holds it for a beat and throws it out the far end faster than
+     it arrived. These five numbers are the whole character of that.
+
+     A pad hands you meter and lets you choose when to spend it; a booster
+     spends it for you, immediately, and takes the wheel while it does. That is
+     the trade, and it is why a booster gives no meter at all.               */
+  boosterHoldFrac:  0.18,  // fraction of the strip spent clamped at arrival
+                           // speed before the throw. The wind-up. Against a car
+                           // already at its cap this is free — it is doing what
+                           // driving would have done — and it costs only
+                           // against one that was still accelerating. What a
+                           // longer hold really does is spend strip that could
+                           // have been throwing, so it pays less
+  boosterExitMul:   1.55,  // release speed, as a multiple of arrival speed.
+                           // Measured 0.32s a lap at this value
+                           // (07_World_Stunt_Track.md). A much smaller multiple
+                           // mostly evaporates: overspeedDecay hauls the car
+                           // back to its cap at 400/sec^2
+  boosterExitCap:   1.60,  // ceiling on release speed, in the car's own max.
+                           // Bites only when you arrive already boosting, so
+                           // a boost into a booster cannot compound
+  boosterPull:      0.65,  // fraction of the car's lateral offset the magnet
+                           // takes away. NOT 1.0 — see Rails.laneAnchor: a
+                           // full snap puts a whole grid in one groove, and
+                           // cars on a rail cannot collide
+  boosterSnapFrac:  0.12,  // how much of the ride the pull takes. Short: the
+                           // yank sideways is the magnet's signature, and a
+                           // gate's leisurely 0.25 reads as drifting across
+
   /* ── DRIFT CHARGE ────────────────────────────────────────────────────────
      Continuous on slip angle — deliberately NOT tiered (no blue/orange
      sparks). Tiers reward HOLDING a drift, which trains players to slide on
@@ -1366,6 +1397,13 @@ BR.Touch = {
    have made every car abruptly slower than the version that was signed off, so
    the whole roster was scaled to preserve the felt speed and keep the relative
    spread intact.
+
+   `material` IS NOT A STAT. It changes nothing a lap time can see — no speed,
+   no grip, no weight. It is what the car is MADE OF, and 09_Vehicles.md is
+   firm that material is characterisation: "the wooden car should feel and
+   sound wooden". One of 'plastic' | 'metal' | 'wood' | 'windup'; the table
+   that turns each into a voice is BR.Audio.MATERIALS, and a car that declares
+   none falls back to plastic rather than falling silent.
    ========================================================================== */
 
 window.BR = window.BR || {};
@@ -1381,6 +1419,9 @@ BR.VEHICLES = {
     handling: 0.85,
     weight: 1.0,
     boostPower: 1.15,
+    // The yardstick car is the yardstick material too — every other voice in
+    // BR.Audio.MATERIALS is defined against this one.
+    material: 'plastic',
     // Placeholder geometry. Replaced by 16-frame sprite sheets once
     // groundTilt is locked (12_Art_Guide.md).
     length: 28, width: 16, height: 11,
@@ -1396,6 +1437,7 @@ BR.VEHICLES = {
     handling: 1.00,
     weight: 1.0,
     boostPower: 1.05,
+    material: 'plastic',
     length: 26, width: 18, height: 13,
     colorBody: '#2f6fd8', colorTop: '#4f8ef2', colorTrim: '#d7e6ff',
   },
@@ -1409,6 +1451,7 @@ BR.VEHICLES = {
     handling: 0.62,
     weight: 0.8,
     boostPower: 1.30,
+    material: 'plastic',
     length: 31, width: 14, height: 9,
     colorBody: '#e8b21c', colorTop: '#ffd34d', colorTrim: '#fff3cc',
   },
@@ -1422,6 +1465,9 @@ BR.VEHICLES = {
     handling: 0.74,
     weight: 1.45,
     boostPower: 1.00,
+    // Die-cast. The heaviest thing on the roster should sound like the
+    // heaviest thing on the roster — it already wins every argument.
+    material: 'metal',
     length: 30, width: 18, height: 14,
     colorBody: '#2f9e52', colorTop: '#4fc072', colorTrim: '#d7f2e0',
   },
@@ -1442,6 +1488,11 @@ BR.VEHICLES = {
     handling: 1.05,
     weight: 1.20,
     boostPower: 1.25,
+    /* "A battered wooden car" (09_Vehicles.md), and the only one in the room.
+       Wood is the material this whole table exists for: a dull knock and no
+       ring, so the oldest car in the game is identifiable with the screen
+       off. */
+    material: 'wood',
     length: 27, width: 17, height: 13,
     colorBody: '#8a5a32', colorTop: '#b07a48', colorTrim: '#e8cfa8',
   },
@@ -1455,6 +1506,16 @@ BR.VEHICLES = {
     handling: 0.98,
     weight: 0.75,
     boostPower: 1.10,
+    /* Tin wind-up. "Tiny, eager, always first out of a corner" is a
+       description of a wind-up toy, and it is the highest acceleration and
+       lowest weight on the roster — which is what a wound spring does.
+
+       MATERIAL ONLY. 09_Vehicles.md flags the wind-up MECHANIC (a periodic
+       self-boost that must be re-wound) as scope creep, and this is not it:
+       nothing here touches physics. It gives the fourth row of 13_Audio.md's
+       material table a car, because a voice with no vehicle never fires and a
+       voice that never fires does not exist. */
+    material: 'windup',
     length: 22, width: 13, height: 10,
     colorBody: '#8b4fd8', colorTop: '#a875f2', colorTrim: '#e8d7ff',
   },
@@ -1481,6 +1542,7 @@ BR.VEHICLES = {
     handling: 0.86,
     weight: 1.42,
     boostPower: 0.92,
+    material: 'metal',          // a die-cast site truck, like every real one
     length: 27, width: 15, height: 13,
     colorBody: '#e07a2f', colorTop: '#f79c52', colorTrim: '#2b2622',
   },
@@ -1494,6 +1556,7 @@ BR.VEHICLES = {
     handling: 0.97,
     weight: 0.92,
     boostPower: 1.02,
+    material: 'plastic',
     length: 24, width: 13, height: 11,
     colorBody: '#2f9e9e', colorTop: '#4fc4c4', colorTrim: '#e8f7f7',
   },
@@ -1507,6 +1570,7 @@ BR.VEHICLES = {
     handling: 0.88,
     weight: 1.18,
     boostPower: 0.98,
+    material: 'plastic',
     length: 28, width: 14, height: 15,
     colorBody: '#e8dcc0', colorTop: '#f5ecd8', colorTrim: '#8c6b3f',
   },
@@ -1766,7 +1830,7 @@ BR.EVENTS.push(
     laps: 3,
     opponents: 7,
     difficulty: 'hard',
-    platinumTime: 85,           // 0.93 x 91.5, re-measured from a mid-grid start
+    platinumTime: 84,           // 0.93 x 90.8, scaled when the grid stopped double-booking a slot
     unlockStars: 20,
     objectives: [
       { id: 'win',      label: 'Win the race' },
@@ -1810,8 +1874,11 @@ BR.EVENTS.push(
     difficulty: 'normal',
     /* 0.93 x 101.9. RE-MEASURED after rides were re-paced by ground distance
        (Rails.js): this track lost 9.1 seconds a race, because its loop had been
-       parking the car for nearly two seconds every lap. */
-    platinumTime: 96,           // 0.93 x 103.6, re-measured from a mid-grid start
+       parking the car for nearly two seconds every lap. Re-measured AGAIN for
+       the magnetic boosters: the same stand-in ran 100.72 before them and 99.00
+       after, so every target here is scaled by that measured 0.983 and nothing
+       else on the board moved by so much as a tick. */
+    platinumTime: 94,           // 0.93 x 101.8, scaled by the measured booster delta
     unlockStars: 26,
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
@@ -1828,8 +1895,8 @@ BR.EVENTS.push(
     laps: 3,
     opponents: 0,
     difficulty: 'normal',
-    times: { gold: 98, silver: 107, bronze: 120 },   // clean reference 102.8
-    platinumTime: 91,
+    times: { gold: 96, silver: 105, bronze: 117 },   // clean reference 100.5
+    platinumTime: 89,
     unlockStars: 29,
     objectives: [
       { id: 'finish',  label: 'Set a time' },
@@ -1915,7 +1982,7 @@ BR.EVENTS.push(
     laps: 3,
     opponents: 7,
     difficulty: 'hard',
-    platinumTime: 86,           // 0.93 x 92.0, re-measured from a mid-grid start
+    platinumTime: 87,           // 0.93 x 92.8, scaled when the grid stopped double-booking a slot
     unlockStars: 18,
     objectives: [
       { id: 'finish',   label: 'Finish the race' },
@@ -2920,6 +2987,66 @@ BR.TRACKS['stunt-dresser-drop'] = {
       minSpeed: 210,
       exitBoost: 0.3,
     },
+
+    /* ── THE MAGNETIC BOOSTER ─────────────────────────────────────────────
+       On the floor, on the long straight out of the start/finish line and into
+       the crossing. Mouth centred on the measured centreline point at index
+       127, (1972,2785), heading -49 degrees; the ride runs 520 units to
+       (2305,2385), which is centreline index 133.5. Measured deviation from
+       the road at the midpoint of that chord: 6 units, against a half-width of
+       150 — the straightest stretch on the track, which is what a fixed
+       direction needs.
+
+       WHY HERE AND NOT ON THE DRESSER. Three reasons, in order of how much
+       they cost to learn:
+
+         - The straight is 1100 units long and the car is already at its cap
+           for all of it, so a booster is the only thing that can make it
+           faster. Somewhere the car is slowing anyway, a ride that holds speed
+           through a corner would be worth far more, and would also delete the
+           corner.
+         - A rail takes its deck height from the first car to ride it
+           (Rails.check sets `deckZ` at capture), so a booster on the raised
+           deck would draw on the bedroom floor until someone rode it. The
+           corkscrew already has that quirk; a second one is not worth adding.
+         - It ends 1050 units short of the loop's mouth. Chaining the throw
+           straight into the loop was tempting and is wrong: two rides back to
+           back is 2.1 seconds of not driving, and the rule that keeps rails
+           tolerable is that the ride is short (Rails.js).
+
+       NO METER (`exitBoost: 0`), unlike the loop and the corkscrew. The throw
+       IS the reward, paid immediately. A booster that also filled the meter
+       would be a boost pad with extra steps, which is the thing this was built
+       not to be.
+
+       The mouth is 150 square, which on this diagonal grabs anything within
+       106 units of the line — the whole width the AI ever uses here, measured
+       at -98 on the lap out of the grid and -20 on the flying laps. */
+    {
+      x: 1897, y: 2710, w: 150, h: 150,
+      dir: [0.6398, -0.7685],      // the chord to centreline index 133.5
+      kind: 'booster',
+      length: 520,
+      width: 190,                  // a magnetised track SECTION, not a groove:
+                                   // wider than the loop's ribbon, and leaving
+                                   // 55 units of violet either side so it reads
+                                   // as a strip laid on the road rather than as
+                                   // the road
+      minSpeed: 200,               // lower than the loop's 230 — a booster is
+                                   // help rather than spectacle — but not zero:
+                                   // a car nudged onto it while spun should not
+                                   // be straightened out and fired down the road
+      exitBoost: 0,
+      /* HARD ALTERNATING BANDS, dark against bright, which is what a magnet
+         looks like and — more to the point — is nothing like a boost pad. The
+         first version was flat mid-teal, and rendered it sat 800 units from the
+         pad at t 0.88, which the renderer draws in mint (#4fd8a8). Two
+         differently-shaped teal patches on the same stretch of floor is exactly
+         the readability the legal note's palette was supposed to buy. */
+      colour:     '#17414a',
+      altColour:  '#31c7bd',
+      railColour: '#9ff5ea',
+    },
   ],
 
   boostPads: [
@@ -3781,6 +3908,26 @@ BR.Collision = {
    under the loop instead. Nothing is confiscated and nothing is punished — the
    loop is a reward you have to be carrying speed to collect, which is the only
    framing that does not feel like the game taking the wheel off you.
+
+   ── THE THIRD KIND: MAGNETIC BOOSTERS ─────────────────────────────────────
+   07_World_Stunt_Track.md listed them as still unbuilt, and said they were
+   "content on top of what now exists rather than new systems — a booster is a
+   boost pad with a rail's entry test". That is exactly what this is: a rail
+   whose ribbon happens to be flat.
+
+   A BOOSTER IS NOT A BOOST PAD, and the difference is the point of building
+   one. A pad tops the meter up and lets you choose when to spend it; you drive
+   straight over it and nothing about the car changes. A booster takes the car:
+   it pulls it onto its groove, holds it there for a beat at the speed it
+   arrived, and throws it out the far end half again as fast. It gives no meter
+   at all (`exitBoost: 0` on the track), because it has already spent the boost
+   for you — that is the trade, and it is what keeps the two things distinct
+   instead of one being a stronger copy of the other.
+
+   Everything else is shared with the loop: same mouth, same corner-anchored
+   entry box, same approach test, same edge trigger, same release. What differs
+   is `frameAt` (no circle) and `step` (the speed profile). See the comment on
+   each.
    ========================================================================== */
 
 window.BR = window.BR || {};
@@ -3851,10 +3998,28 @@ BR.Rails = {
          car's exact entry position, as it always has. */
       const anchor = this.laneAnchor(R, v);
 
+      /* WHERE A BOOSTER IS THROWING YOU, decided once at capture rather than
+         per tick, so the ride has a promise it can keep exactly on release.
+
+         Scaled off ARRIVAL speed, not a flat number: a booster that set every
+         car to the same speed would be worth most to whoever arrived slowest,
+         which makes braking into it the fast line and is the loop's old trap
+         wearing a friendlier face. The cap is in the car's OWN max speed, so
+         arriving already boosting cannot compound into something silly. */
+      const P = BR.PHYSICS;
+      const exit = R.kind === 'booster'
+        ? Math.min(v.spec.maxSpeed * P.boosterExitCap,
+                   Math.max(speed, speed * P.boosterExitMul))
+        : speed;
+
       v.rail = {
         def: R,
         t: 0,
         speed: speed,
+        // Arrival and release. Equal on a loop, which neither gives nor takes
+        // pace; a booster interpolates between them (see `step`).
+        entry: speed,
+        exit: exit,
         // Where the ride started, so the ground track is exact rather than
         // integrated — a ride must put you back on the road, every time.
         x0: anchor.x, y0: anchor.y,
@@ -3878,9 +4043,30 @@ BR.Rails = {
    *
    * A lone rail starts under the car. A gate branch starts on its own lane, so
    * that two branches are two visibly separate routes rather than one ribbon
-   * drawn twice.
+   * drawn twice. A booster starts between the two: pulled toward its groove,
+   * but not all the way onto it.
    */
   laneAnchor(R, v) {
+    if (R.kind === 'booster') {
+      /* THE MAGNET, and the reason it is not a snap.
+
+         Pulling the car all the way onto the strip's centre line is what the
+         thing wants to do, and it is wrong: a rail car cannot be shoved
+         (main.js resolveCarContacts sits rail cars out), so eight cars off a
+         grid all boarding the same strip would be eight cars occupying one
+         line and driving through each other. Removing 65% of the lateral
+         offset reads as being yanked in — it is a visible sideways jerk of
+         several car widths from the edge of the mouth — while two cars
+         entering abreast stay abreast, just closer together.
+
+         Longitudinal position is kept exactly. Snapping that too would jerk
+         the car up to half a mouth forwards or backwards along the road, and
+         backwards is unforgivable. */
+      const nx = -R.dir[1], ny = R.dir[0];
+      const u = (v.x - (R.x + R.w / 2)) * nx + (v.y - (R.y + R.h / 2)) * ny;
+      const pull = u * BR.PHYSICS.boosterPull;
+      return { x: v.x - nx * pull, y: v.y - ny * pull };
+    }
     if (!R.gate) return { x: v.x, y: v.y };
     const nx = -R.dir[1], ny = R.dir[0];
     const lane = R.lane || 0;
@@ -3919,7 +4105,22 @@ BR.Rails = {
    * description of the geometry and the renderer's stripe count reads it.
    */
   arcLength(R) {
+    // A booster has no circle in it, so its surface is exactly its length.
+    if (R.kind === 'booster') return R.length;
     return Math.hypot(2 * Math.PI * R.radius * (R.turns || 1), R.length);
+  },
+
+  /**
+   * How far a mouth reaches ALONG the direction of travel, from its centre.
+   *
+   * The entry box is axis-aligned and the road usually is not, so a mouth that
+   * spans the road laterally is just as deep longitudinally — on Dresser Drop's
+   * booster, 106 units either side of centre. That is where the ride starts,
+   * so it is also how much longer than the ride the painted strip has to be
+   * (see `ringPoint`).
+   */
+  mouthReach(R) {
+    return (R.w * Math.abs(R.dir[0]) + R.h * Math.abs(R.dir[1])) / 2;
   },
 
   /**
@@ -3949,6 +4150,21 @@ BR.Rails = {
     const fx = R.dir[0], fy = R.dir[1];
     const nx = -fy, ny = fx;                    // lateral, left of travel
     const cork = R.kind === 'corkscrew';
+
+    /* A BOOSTER TURNS ABOUT NOTHING. It is the degenerate ride: a flat strip
+       lying on the deck, no displacement, up is up and across is across. The
+       car keeps both wheels on the ground and stays level the whole way, which
+       is what makes it read as a groove in the track rather than as furniture
+       bolted on top of it — and it is the whole reason a booster cost a branch
+       here instead of a system of its own. */
+    if (R.kind === 'booster') {
+      return {
+        a: 0,
+        off:    { x: 0,  y: 0,  z: 0 },
+        up:     { x: 0,  y: 0,  z: 1 },
+        across: { x: nx, y: ny, z: 0 },
+      };
+    }
 
     /* BOTH RIDES PUT THEIR CIRCLE IN THE LATERAL/UP PLANE. That is a decision
        forced by the camera, and it is worth being plain about why.
@@ -3994,6 +4210,31 @@ BR.Rails = {
   step(v, dt) {
     if (!v.rail) return false;
     const R = v.rail.def;
+    const booster = R.kind === 'booster';
+
+    /* THE THROW. A loop carries the car at one speed; a booster does not, and
+       that difference is the entire feature.
+
+         hold    the first `boosterHoldFrac` of the strip, clamped at the speed
+                 the car arrived with. The magnet has it and is not letting go
+                 yet. This is the only part that costs time, because a car that
+                 was still accelerating would have gained a little here.
+         throw   the rest, ramping to the release speed on t^2 — slow to start
+                 and steepest at the end, so the shove arrives as you leave
+                 rather than as you board.
+
+       THE STRIP ITSELF HAS TO BE QUICKER THAN DRIVING IT. Releasing above the
+       car's cap looks like the whole payoff and cannot be, because
+       overspeedDecay pulls 400 units/sec^2 back toward the cap and the excess
+       is gone in well under a second. Measured entering at 366, the ride takes
+       1.250s over ground that costs 1.421s to drive — and that 0.171s is what
+       the hold eats into, which is why it is a fifth of the strip and not a
+       third. The whole lap gains 0.32s; see 07_World_Stunt_Track.md. */
+    if (booster) {
+      const h = BR.PHYSICS.boosterHoldFrac;
+      const u = v.rail.t <= h ? 0 : (v.rail.t - h) / (1 - h);
+      v.rail.speed = v.rail.entry + (v.rail.exit - v.rail.entry) * u * u;
+    }
 
     /* PACED BY GROUND DISTANCE, NOT BY THE CIRCUMFERENCE OF THE CIRCLE.
        This was `/ arcLength(R)`, which is the physically honest reading — going
@@ -4015,15 +4256,19 @@ BR.Rails = {
     v.rail.t += (v.rail.speed * dt) / Math.max(1, R.length);
 
     if (v.rail.t >= 1) {
-      // Released travelling the way the ride points, at the speed it came in.
+      /* Released travelling the way the ride points, at the speed it came in —
+         or, on a booster, at the speed it was promised at capture. Reading
+         `exit` rather than whatever the profile happens to have reached means
+         the last tick's overshoot past t = 1 cannot shave the throw. */
       v.x = v.rail.x0 + R.dir[0] * R.length;
       v.y = v.rail.y0 + R.dir[1] * R.length;
       v.z = 0;
       v.roll = 0;
       v.up = { x: 0, y: 0, z: 1 };
       v.heading = Math.atan2(R.dir[1], R.dir[0]);
-      v.vel.x = R.dir[0] * v.rail.speed;
-      v.vel.y = R.dir[1] * v.rail.speed;
+      const out = booster ? v.rail.exit : v.rail.speed;
+      v.vel.x = R.dir[0] * out;
+      v.vel.y = R.dir[1] * out;
       v.grounded = true;
       v.vz = 0;
       if (R.exitBoost) {
@@ -4039,7 +4284,8 @@ BR.Rails = {
        down the middle of a fork is guided across rather than jumped across. A
        lone rail has ex/ey equal to x0/y0, so this is a no-op for every loop and
        corkscrew that is not a gate. */
-    const blend = Math.min(1, v.rail.t / 0.25);
+    const blend = Math.min(1, v.rail.t /
+      (booster ? BR.PHYSICS.boosterSnapFrac : 0.25));
     const bx = v.rail.ex + (v.rail.x0 - v.rail.ex) * blend;
     const by = v.rail.ey + (v.rail.y0 - v.rail.ey) * blend;
 
@@ -4074,10 +4320,27 @@ BR.Rails = {
     // Same lane the car is put on, or the ribbon and the ride would disagree.
     const lane = R.gate ? (R.lane || 0) : 0;
     const nx = -R.dir[1], ny = R.dir[0];
+
+    /* THE PAINTED STRIP IS LONGER THAN ANY ONE RIDE, and has to be.
+
+       A ride starts where the car TOUCHED the mouth, not at the mouth's
+       centre, and a mouth wide enough to span the road is 106 units deep along
+       the road as well (`mouthReach`). So a booster's ribbon runs from a
+       mouth-reach behind the centre to a mouth-reach past the release point:
+       every ride is then over paint for its whole length. Drawn ride-length
+       only, a car that boarded late spent its last fifth flying along bare
+       road, which reads as the strip having run out from under it.
+
+       A loop needs none of this — you are looking at a circle, not at where
+       the paint ends — so its ribbon is exactly its ride and this is a no-op
+       for every rail that is not a booster. */
+    const pad = R.kind === 'booster' ? this.mouthReach(R) : 0;
+    const run = (-pad + (R.length + 2 * pad) * t);
+
     return [
-      R.x + R.w / 2 + nx * lane + R.dir[0] * R.length * t + F.off.x
+      R.x + R.w / 2 + nx * lane + R.dir[0] * run + F.off.x
         + F.across.x * half * side + F.up.x * L,
-      R.y + R.h / 2 + ny * lane + R.dir[1] * R.length * t + F.off.y
+      R.y + R.h / 2 + ny * lane + R.dir[1] * run + F.off.y
         + F.across.y * half * side + F.up.y * L,
       (R.deckZ || 0) + F.off.z + F.across.z * half * side + F.up.z * L,
     ];
@@ -5376,7 +5639,8 @@ BR.AIDriver = {
       targetSpeedMul: 0.91, lineAccuracy: 0.65, cornerCaution: 1.35,
       boostEfficiency: 0.25, mistakeChance: 0.16, driftSkill: 0.4,
       sandReading: 0.15,      // hasn't noticed the ground is different
-      itemSkill: 0.25,        // sits on things and fires them late
+      itemSkill: 0.25,        // barely notices a target
+      itemPatience: 7.0,      // sits on things and fires them late
       gateNerve: 0.55,        // wants a big margin before trying the high road
     },
     technician: {
@@ -5384,7 +5648,8 @@ BR.AIDriver = {
       targetSpeedMul: 0.99, lineAccuracy: 0.95, cornerCaution: 0.95,
       boostEfficiency: 0.90, mistakeChance: 0.03, driftSkill: 0.95,
       sandReading: 0.95,      // reading the surface is the whole personality
-      itemSkill: 0.95,        // waits for a target, then uses it
+      itemSkill: 0.95,        // spots a target from a long way off
+      itemPatience: 4.0,      // waits for one, then uses it
       gateNerve: 1.00,        // knows exactly what it will be carrying
     },
     speedster: {
@@ -5392,7 +5657,8 @@ BR.AIDriver = {
       targetSpeedMul: 1.10, lineAccuracy: 0.72, cornerCaution: 0.70,
       boostEfficiency: 0.60, mistakeChance: 0.14, driftSkill: 0.6,
       sandReading: 0.45,      // too busy going fast to look down
-      itemSkill: 0.6,         // empties the slot the moment it fills
+      itemSkill: 0.6,         // sees a target, but rarely waits for one
+      itemPatience: 0.4,      // empties the slot the moment it fills
       gateNerve: 1.35,        // takes the high road it cannot always make
     },
     bully: {
@@ -5400,7 +5666,8 @@ BR.AIDriver = {
       targetSpeedMul: 0.96, lineAccuracy: 0.70, cornerCaution: 1.05,
       boostEfficiency: 0.50, mistakeChance: 0.08, driftSkill: 0.5,
       sandReading: 0.55,      // will happily take the line you just made
-      itemSkill: 0.8,         // saves the offensive ones for company
+      itemSkill: 0.8,         // good eye for a victim
+      itemPatience: 4.5,      // saves the offensive ones for company
       gateNerve: 0.90,        // goes where the traffic isn't
     },
   },
@@ -5548,6 +5815,10 @@ BR.AIDriver = {
      the whole field took the same branch. Measured, a driver needs about 180
      units to ease 70 across the road, so 340 leaves room to move while judging
      a speed close to the one it will actually turn up with. */
+  /* How far off a rival registers as a target, before itemSkill scales it.
+     A Rookie at 0.25 has to be almost touching one. */
+  ITEM_RANGE: 340,
+
   GATE_LOOK: 340,
 
   /**
@@ -5803,11 +6074,30 @@ BR.AIDriver = {
       const def = BR.Items.DEFS[v.item];
       if (def && def.offensive) {
         ai.itemHold = (ai.itemHold || 0) + dt;
-        if (this.nearestRival(v) < 340 || ai.itemHold > 6 * ai.p.itemSkill) {
+        /* TWO TRAITS, NOT ONE, because the four documented personalities are
+           not monotonic in skill and one number cannot describe them.
+
+           The fallback used to be `itemHold > 6 * itemSkill`, which fires
+           SOONEST for the lowest skill — the exact opposite of the Rookie's
+           own comment, "sits on things and fires them late". Measured over a
+           full item race it showed: low-skill drivers fired 11.5 items on
+           average against high-skill 9.7.
+
+           `itemSkill` is now only about SEEING a target: it scales how far off
+           a rival registers, so a Rookie has to be almost touching one before
+           it notices. `itemPatience` is how long it will hold before firing
+           blind, and it is orthogonal — the Speedster has middling skill and
+           almost no patience, because it "empties the slot the moment it
+           fills". */
+        const range = this.ITEM_RANGE * ai.p.itemSkill;
+        const patience = ai.p.itemPatience === undefined ? 4 : ai.p.itemPatience;
+        if (this.rivalAhead(v) < range || ai.itemHold > patience) {
           input.item = true;
           ai.itemHold = 0;
         }
       } else if (Math.random() < ai.p.itemSkill * 1.6 * dt) {
+        // Defensive items help whoever holds them, so there is nothing to aim
+        // and skill is simply how quickly it thinks to use one.
         input.item = true;
       }
     } else {
@@ -5818,6 +6108,38 @@ BR.AIDriver = {
   },
 
   /** Distance to the closest other car. */
+  /**
+   * Distance to the nearest rival IN FRONT, or Infinity if there is none.
+   *
+   * Targeting used `nearestRival`, which is omnidirectional, and in an
+   * eight-car pack somebody is nearly always within a few hundred units in
+   * SOME direction. So a high-skill driver never had to wait for a target and
+   * fired the instant it was handed anything — measured at a 0.02s median
+   * hold, against its own comment "waits for a target, then uses it".
+   *
+   * Two of the three offensive items travel forward — the aeroplane flies
+   * along the car's heading and the hammer has a 210-unit reach — so a rival
+   * behind is not a target at all, and saying so is what makes waiting mean
+   * something.
+   */
+  rivalAhead(v) {
+    const list = (BR.Game && BR.Game.vehicles) || [];
+    const hx = Math.cos(v.heading), hy = Math.sin(v.heading);
+    let best = Infinity;
+    for (let i = 0; i < list.length; i++) {
+      const o = list[i];
+      if (o === v || o.isGhost) continue;
+      const dx = o.x - v.x, dy = o.y - v.y;
+      // Ahead, and roughly in the cone the item would travel through.
+      const along = dx * hx + dy * hy;
+      if (along <= 0) continue;
+      const d = Math.hypot(dx, dy);
+      if (along < d * 0.55) continue;          // off to one side, not in front
+      if (d < best) best = d;
+    }
+    return best;
+  },
+
   nearestRival(v) {
     const list = (BR.Game && BR.Game.vehicles) || [];
     let best = Infinity;
@@ -6141,6 +6463,119 @@ BR.Audio = {
     this.musicBus.gain.value = this.musicEnabled ? this.musicVolume : 0;
   },
 
+  /* ── PER-VEHICLE MATERIAL ─────────────────────────────────────────────────
+     09_Vehicles.md: "Each should bring a MATERIAL as much as a stat spread —
+     the wooden car should feel and sound wooden. Material is characterisation."
+     13_Audio.md then names four and what each should do:
+
+       die-cast metal  heavier, ringing impacts, low rattle
+       glossy plastic  light, hollow, clattering
+       wood            dull knock, no ring
+       wind-up         mechanical ratchet under the engine
+
+     GLOSSY PLASTIC IS THE REFERENCE, and its numbers are exactly what shipped
+     before this table existed — most of the roster is a plastic toy car, so
+     the common case must not change. The other three are defined against it,
+     the same way the town rug is the reference for the three music beds.
+
+     WHAT A MATERIAL MAY NOT TOUCH. Audio's first job is gameplay feedback and
+     its third is mood (13_Audio.md ranks them), so material only ever changes
+     the mood layer of a cue and never the part carrying information:
+
+       - Engine pitch still tracks speed; material shifts the whole curve by a
+         constant, so "faster is higher" survives.
+       - The rug/road tyre split is still 420 vs 1100 scaled together, so
+         leaving the road is exactly as audible in every car.
+       - Drift is untouched. That is tyres against the FLOOR — it belongs to
+         the surface, not to the shell.
+       - The clean-landing chime is untouched. It is the cue that says the
+         landing was clean, and a car you cannot hear it on would be a car
+         punished for its material.
+
+     `pitch`, `cut*`, `rattle*` and `hit*` are multipliers on the shipped
+     values; `ring`, `clatter` and `ratchet` are additions that only some
+     materials have at all. */
+  MATERIALS: {
+    /* Light, hollow, clattering — and the fallback for anything undeclared. */
+    plastic: {
+      id: 'plastic', label: 'glossy plastic',
+      o1: 'sawtooth', o2: 'square',     // square is the hollow half
+      detune: 1.012, engQ: 3.0, pitch: 1.00,
+      cutBase: 600, cutSpan: 1500, engGain: 1.00,
+      rattleHz: 1.00, rattleQ: 1.2, rattleGain: 1.00,
+      hitHz: 1.00, hitLen: 1.00, hitQ: 1.4, hitGain: 1.00, hitTone: 'triangle',
+      ringHz: 0, ringDur: 0,
+      clatter: 2,                       // the loose pieces, after the hit
+      ratchet: 0, rateBase: 0, rateSpan: 0, clickHz: 2600, clickQ: 7,
+    },
+    /* Die-cast: heavier, ringing impacts, low rattle. Two saws rather than a
+       saw and a square, because the square is what makes plastic sound empty
+       and a metal car is not. Tighter detune, so it beats slowly instead of
+       warbling; a higher Q for the resonance a metal shell has. */
+    metal: {
+      id: 'metal', label: 'die-cast metal',
+      o1: 'sawtooth', o2: 'sawtooth',
+      detune: 1.006, engQ: 4.5, pitch: 0.90,
+      cutBase: 520, cutSpan: 1150, engGain: 1.10,
+      rattleHz: 0.60, rattleQ: 2.6, rattleGain: 1.15,
+      hitHz: 0.86, hitLen: 1.50, hitQ: 3.2, hitGain: 1.20, hitTone: 'triangle',
+      ringHz: 2100, ringDur: 0.45,      // the whole point of this row
+      clatter: 0,
+      ratchet: 0, rateBase: 0, rateSpan: 0, clickHz: 2600, clickQ: 7,
+    },
+    /* Wood: dull knock, no ring. Everything that could resonate is taken away
+       — lowest cutoff on the roster, Q under 1 in both the body and the hit,
+       no ring partial and no clatter. The knock is also the SHORTEST, because
+       what makes wood sound like wood is how fast it stops. */
+    wood: {
+      id: 'wood', label: 'wood',
+      o1: 'triangle', o2: 'sawtooth',
+      detune: 1.021, engQ: 1.4, pitch: 0.94,
+      cutBase: 420, cutSpan: 900, engGain: 0.92,
+      rattleHz: 0.78, rattleQ: 0.7, rattleGain: 0.85,
+      hitHz: 0.72, hitLen: 0.55, hitQ: 0.8, hitGain: 0.95, hitTone: 'sine',
+      ringHz: 0, ringDur: 0,
+      clatter: 0,
+      ratchet: 0, rateBase: 0, rateSpan: 0, clickHz: 2600, clickQ: 7,
+    },
+    /* Wind-up: a mechanical ratchet under the engine. Tin, so both oscillators
+       are squares and the detune is the widest here — a wind-up toy is not in
+       tune with itself. The ratchet rate tracks speed, which is the sound of a
+       spring unwinding faster. */
+    windup: {
+      id: 'windup', label: 'wind-up tin',
+      o1: 'square', o2: 'square',
+      detune: 1.030, engQ: 2.2, pitch: 1.08,
+      cutBase: 700, cutSpan: 1700, engGain: 0.95,
+      rattleHz: 1.18, rattleQ: 1.9, rattleGain: 1.00,
+      hitHz: 1.06, hitLen: 0.85, hitQ: 2.0, hitGain: 0.90, hitTone: 'square',
+      ringHz: 0, ringDur: 0,
+      clatter: 1,                       // one tick: the mechanism jolting
+      ratchet: 0.055, rateBase: 9, rateSpan: 30, clickHz: 2600, clickQ: 7,
+    },
+  },
+
+  /** A spec's material, or plastic. An undeclared car is a plastic toy car —
+      the roster's common case — never a silent one. */
+  materialFor(spec) {
+    return (spec && this.MATERIALS[spec.material]) || this.MATERIALS.plastic;
+  },
+
+  /* Applied on CHANGE, never per frame. Oscillator type and filter Q can be
+     set on a running node, so swapping cars re-materialises the existing graph
+     rather than rebuilding it — the channels are built up front precisely
+     because reconnecting a running graph clicks, and rebuilding one mid-race
+     would throw that away. */
+  applyMaterial(ch, m) {
+    ch.material = m.id;
+    ch.engine.o1.type = m.o1;
+    ch.engine.o2.type = m.o2;
+    ch.engine.filt.Q.value = m.engQ;
+    ch.rattle.filt.Q.value = m.rattleQ;
+    ch.ratchet.filt.frequency.value = m.clickHz;
+    ch.ratchet.filt.Q.value = m.clickQ;
+  },
+
   /* One player's entire soundstage: their car, their tyres, their rivals. */
   makeChannel() {
     const ctx = this.ctx;
@@ -6162,7 +6597,11 @@ BR.Audio = {
       rattle:   this.makeNoiseVoice(900, 1.2, out),
       drift:    this.makeNoiseVoice(1600, 4.0, out),
       boostAir: this.makeNoiseVoice(700, 0.9, out),
+      ratchet:  this.makeRatchet(out),
       pack:     this.makeEngine(out),
+      // Which material this channel is currently wearing. Null until the first
+      // frame, so applyMaterial always runs once.
+      material: null,
       prev: null,
     };
   },
@@ -6205,11 +6644,43 @@ BR.Audio = {
     return { src: src, filt: filt, gain: g };
   },
 
-  /* ── one-shots. `dest` routes to a player's channel; omit for centre. ──── */
+  /* The wind-up ratchet: narrow-banded noise GATED by a square LFO, so the
+     click rate is a parameter rather than a schedule.
 
-  blip(freq, dur, type, vol, sweepTo, dest) {
+     Built as a graph on purpose. The obvious implementation is to fire a tick
+     per frame at the right interval, and that is exactly the shape of bug the
+     counters exist to prevent — it would run on the render clock, drift with
+     frame rate, and machine-gun the moment the fixed step ran twice. An LFO
+     runs on the audio thread and cannot do any of that.
+
+     The gating trick: an AudioParam's value is its intrinsic value PLUS every
+     signal connected to it. Hold both at `a` and a ±a square swings the gain
+     between 0 and 2a — silence for half of each period, which is a ratchet. */
+  makeRatchet(dest) {
+    const ctx = this.ctx;
+    const src = ctx.createBufferSource();
+    src.buffer = this.noiseBuf; src.loop = true;
+    const filt = ctx.createBiquadFilter();
+    filt.type = 'bandpass'; filt.frequency.value = 2600; filt.Q.value = 7;
+    const g = ctx.createGain(); g.gain.value = 0;
+    const lfo = ctx.createOscillator();
+    lfo.type = 'square'; lfo.frequency.value = 1;
+    const amp = ctx.createGain(); amp.gain.value = 0;
+    lfo.connect(amp); amp.connect(g.gain);
+    src.connect(filt); filt.connect(g); g.connect(dest);
+    src.start(); lfo.start();
+    return { src: src, filt: filt, gain: g, lfo: lfo, amp: amp };
+  },
+
+  /* ── one-shots. `dest` routes to a player's channel; omit for centre. ────
+     `delay` schedules against the AUDIO clock, not setTimeout — a clatter is
+     several pieces knocking a few tens of milliseconds apart, and setTimeout
+     cannot be trusted at that resolution. Optional, so every existing caller
+     keeps the timing it had. */
+
+  blip(freq, dur, type, vol, sweepTo, dest, delay) {
     if (!this.ready) return;
-    const ctx = this.ctx, t = ctx.currentTime;
+    const ctx = this.ctx, t = ctx.currentTime + (delay || 0);
     const o = ctx.createOscillator();
     o.type = type || 'sine';
     o.frequency.setValueAtTime(freq, t);
@@ -6222,9 +6693,9 @@ BR.Audio = {
     o.start(t); o.stop(t + dur + 0.02);
   },
 
-  thud(vol, freq, dur, q, dest) {
+  thud(vol, freq, dur, q, dest, delay) {
     if (!this.ready) return;
-    const ctx = this.ctx, t = ctx.currentTime;
+    const ctx = this.ctx, t = ctx.currentTime + (delay || 0);
     const src = ctx.createBufferSource();
     src.buffer = this.noiseBuf;
     const filt = ctx.createBiquadFilter();
@@ -6240,11 +6711,40 @@ BR.Audio = {
   },
 
   /* Collisions are playful, not violent. Severity picks pitch and length, so a
-     graze ticks and a square hit clunks — 02_Mechanics.md. */
-  collide(severity, dest) {
+     graze ticks and a square hit clunks — 02_Mechanics.md. `mat` is what the
+     car is made of; omitted, it is a plastic one. */
+  collide(severity, dest, mat) {
+    const m = mat || this.MATERIALS.plastic;
     const s = Math.max(0, Math.min(1, severity));
-    this.thud(0.10 + 0.35 * s, 420 - 220 * s, 0.09 + 0.16 * s, 1.2, dest);
-    if (s > 0.55) this.blip(180 + 60 * (1 - s), 0.16, 'triangle', 0.13, 90, dest);
+    this.thud((0.10 + 0.35 * s) * m.hitGain, (420 - 220 * s) * m.hitHz,
+              (0.09 + 0.16 * s) * m.hitLen, m.hitQ, dest);
+    if (s > 0.55) {
+      this.blip((180 + 60 * (1 - s)) * m.hitHz, 0.16 * m.hitLen, m.hitTone,
+                0.13 * m.hitGain, 90 * m.hitHz, dest);
+    }
+    this.shell(s, dest, m);
+  },
+
+  /* WHAT THE SHELL DOES AFTER THE HIT — the part that is actually the
+     material. The thud above is the contact and every car has one; this is the
+     object still moving afterwards, and it is where metal, plastic and wood
+     stop being the same event at different pitches.
+
+     Wood has neither branch. "Dull knock, no ring" is a statement about what
+     is ABSENT, so the wooden car's impact is over when the knock is. */
+  shell(s, dest, m) {
+    if (m.ringHz) {
+      /* Two partials at 1:1.51. An integer ratio reads as a musical note; an
+         irrational-ish one reads as struck metal, which is the difference
+         between a chime and a die-cast car hitting a skirting board. */
+      const v = 0.05 + 0.07 * s, d = m.ringDur * (0.6 + 0.4 * s);
+      this.blip(m.ringHz, d, 'sine', v, m.ringHz * 0.86, dest);
+      this.blip(m.ringHz * 1.51, d * 0.7, 'sine', v * 0.5, m.ringHz * 1.30, dest);
+    }
+    // Loose pieces, landing after the car has. Scheduled on the audio clock.
+    for (let i = 0; i < m.clatter; i++) {
+      this.thud(0.05 + 0.05 * s, 1500 + i * 620, 0.035, 5, dest, 0.045 + i * 0.04);
+    }
   },
 
   /* THE most important sound in the game (13_Audio.md). Must be unmistakable
@@ -6256,12 +6756,20 @@ BR.Audio = {
     this.thud(0.18, 1400, 0.3, 0.7, dest);
   },
 
-  landing(clean, dest) {
+  /* A landing is the car hitting the floor, so it takes the material too —
+     except for the chime, which does not vary. That chime IS the "you landed
+     clean" cue (13_Audio.md's gameplay-critical table), and a car whose
+     confirmation was quieter or duller than everyone else's would be a car
+     penalised for what it is made of. Character sits on top of readability,
+     never instead of it. */
+  landing(clean, dest, mat) {
+    const m = mat || this.MATERIALS.plastic;
     if (clean) {
-      this.thud(0.2, 900, 0.09, 2.2, dest);
+      this.thud(0.2 * m.hitGain, 900 * m.hitHz, 0.09 * m.hitLen, 2.2, dest);
       this.blip(1200, 0.1, 'sine', 0.13, 1700, dest);
     } else {
-      this.thud(0.3, 260, 0.19, 1.0, dest);
+      this.thud(0.3 * m.hitGain, 260 * m.hitHz, 0.19 * m.hitLen, m.hitQ, dest);
+      this.shell(0.7, dest, m);
     }
   },
 
@@ -6369,6 +6877,7 @@ BR.Audio = {
 
     this.updateRace(RM);
     this.music(racing, RM);
+    this.ambience(racing);
   },
 
   silence(ch) {
@@ -6378,6 +6887,11 @@ BR.Audio = {
     ch.drift.gain.gain.setTargetAtTime(0, now, 0.08);
     ch.boostAir.gain.gain.setTargetAtTime(0, now, 0.08);
     ch.pack.gain.gain.setTargetAtTime(0, now, 0.08);
+    // The ratchet is gated by two gains summed into one param, so BOTH have to
+    // go to zero — leaving the LFO amplitude up would keep it ticking at half
+    // level on a silenced channel.
+    ch.ratchet.gain.gain.setTargetAtTime(0, now, 0.08);
+    ch.ratchet.amp.gain.setTargetAtTime(0, now, 0.08);
     ch.prev = null;
   },
 
@@ -6390,6 +6904,12 @@ BR.Audio = {
     const speed = Math.hypot(v.vel.x, v.vel.y);
     const ratio = Math.min(1, speed / v.spec.maxSpeed);
 
+    /* What this car is made of. Cheap to look up every frame, and only
+       re-applied when it actually changes — which is at most once a race,
+       when a channel starts voicing a different car. */
+    const m = this.materialFor(v.spec);
+    if (ch.material !== m.id) this.applyMaterial(ch, m);
+
     if (!ch.prev) {
       ch.prev = { boost: v.boostMeter, boosting: v.boosting, grounded: v.grounded,
                   impacts: v.impacts || 0, cps: racer.cpsPassed, lap: racer.lap,
@@ -6401,20 +6921,35 @@ BR.Audio = {
     const p = ch.prev;
 
     // ── engine ────────────────────────────────────────────────────────────
-    const base = 62 + ratio * 210 + (v.boosting ? 40 : 0);
+    // The speed curve is unchanged; the material shifts the whole of it, so a
+    // heavier car sits lower everywhere without "faster is higher" breaking.
+    const base = (62 + ratio * 210 + (v.boosting ? 40 : 0)) * m.pitch;
     ch.engine.o1.frequency.setTargetAtTime(base, now, 0.05);
-    ch.engine.o2.frequency.setTargetAtTime(base * 1.012, now, 0.05);
-    ch.engine.filt.frequency.setTargetAtTime(600 + ratio * 1500, now, 0.08);
-    ch.engine.gain.gain.setTargetAtTime(engOn ? 0.035 + ratio * 0.05 : 0, now, 0.1);
+    ch.engine.o2.frequency.setTargetAtTime(base * m.detune, now, 0.05);
+    ch.engine.filt.frequency.setTargetAtTime(m.cutBase + ratio * m.cutSpan, now, 0.08);
+    ch.engine.gain.gain.setTargetAtTime(
+      engOn ? (0.035 + ratio * 0.05) * m.engGain : 0, now, 0.1);
+
+    /* The ratchet. Silent on everything that is not a wind-up, so this costs
+       three parameter writes and no voices on the rest of the roster. Rate
+       tracks speed — a spring unwinding faster — and it is a GRAPH, so
+       nothing here fires anything; see makeRatchet. */
+    const rLevel = (engOn && m.ratchet) ? m.ratchet * (0.45 + 0.55 * ratio) : 0;
+    ch.ratchet.lfo.frequency.setTargetAtTime(
+      (m.rateBase + ratio * m.rateSpan) || 1, now, 0.08);
+    ch.ratchet.gain.gain.setTargetAtTime(rLevel * 0.5, now, 0.07);
+    ch.ratchet.amp.gain.setTargetAtTime(rLevel * 0.5, now, 0.07);
 
     // ── surface ───────────────────────────────────────────────────────────
     // The tyre note must change the instant the surface does, so the player
-    // learns the map by feel (13_Audio.md).
+    // learns the map by feel (13_Audio.md). Material scales BOTH ends of the
+    // rug/road split by the same factor, so the size of the change — the part
+    // carrying the information — is identical in every car.
     const rough = v.surface === 'rugGrass' ? 1 : 0.32;
     ch.rattle.filt.frequency.setTargetAtTime(
-      v.surface === 'rugGrass' ? 420 : 1100, now, 0.05);
+      (v.surface === 'rugGrass' ? 420 : 1100) * m.rattleHz, now, 0.05);
     ch.rattle.gain.gain.setTargetAtTime(
-      v.grounded && engOn ? ratio * 0.05 * rough : 0, now, 0.06);
+      v.grounded && engOn ? ratio * 0.05 * rough * m.rattleGain : 0, now, 0.06);
 
     // ── drift: pitch tracks slip, so how hard you slide is audible ────────
     const slip = Math.min(1, v.slip / 0.9);
@@ -6434,9 +6969,10 @@ BR.Audio = {
     if (v.boostMeter - p.boost > 0.25) this.pad(dest);
 
     // ── landing and collisions ────────────────────────────────────────────
-    if (v.grounded && !p.grounded) this.landing(v.lastLanding === 'clean', dest);
+    // Both take the material: this is the car's own body hitting something.
+    if (v.grounded && !p.grounded) this.landing(v.lastLanding === 'clean', dest, m);
     const impacts = v.impacts || 0;
-    if (impacts > p.impacts) this.collide(v.lastImpact || 0.4, dest);
+    if (impacts > p.impacts) this.collide(v.lastImpact || 0.4, dest, m);
 
     /* ── items, rides and falls ───────────────────────────────────────────
        Edge-detected off counters here rather than called from the fixed step,
@@ -6568,6 +7104,142 @@ BR.Audio = {
   },
 
   bedFor(world) { return this.MUSIC[world] || this.MUSIC['town-rug']; },
+
+  /* ── AMBIENCE — the house going on around the race ───────────────────────
+     13_Audio.md has always listed environmental sound under "Still missing",
+     and is unusually specific about why it matters: "Distant household sounds
+     carry the framing story from 00_Vision.md - the toys are racing while the
+     house goes on around them... Used sparingly, this does more for the
+     premise than any cutscene would."
+
+     SPARINGLY IS THE WHOLE DESIGN. A race is ninety seconds of engine, tyres
+     and collisions; anything continuous underneath it becomes noise you stop
+     hearing and then cannot unhear. These fire every few seconds at most, and
+     always quietly.
+
+     On the SFX bus, not the music bus. This is diegetic world sound, so a
+     player who turns the music down to hear the driving should keep the room
+     they are driving in. */
+  AMBIENCE: {
+    'town-rug': {
+      every: [2.6, 5.2],
+      voices: [
+        // A bedroom clock, the most recognisable "indoors at night" sound there
+        // is, and the cheapest: two clicks a couple of hundred ms apart.
+        { w: 4, play: function (A, d) {
+            A.blip(2400, 0.012, 'square', 0.030, 1900, A.sfxBus, d);
+            A.blip(2100, 0.010, 'square', 0.022, 1700, A.sfxBus, d + 0.52);
+          } },
+        // A floorboard, somewhere behind you.
+        { w: 3, play: function (A, d) {
+            A.thud(0.045, 96, 0.26, 2.2, A.sfxBus, d);
+          } },
+        // A door closing elsewhere in the house. Low, soft, and gone.
+        { w: 2, play: function (A, d) {
+            A.thud(0.055, 62, 0.34, 1.1, A.sfxBus, d);
+          } },
+        // Plastic settling on the rug.
+        { w: 3, play: function (A, d) {
+            A.blip(880, 0.05, 'triangle', 0.028, 520, A.sfxBus, d);
+            A.blip(700, 0.04, 'triangle', 0.020, 430, A.sfxBus, d + 0.07);
+          } },
+      ],
+    },
+    sandbox: {
+      every: [3.2, 6.4],
+      voices: [
+        // Wind across an open sandpit: a long breath of filtered noise.
+        { w: 5, play: function (A, d) { A.gust(d, 1.6, 0.040, 520); } },
+        { w: 3, play: function (A, d) { A.gust(d, 2.4, 0.030, 340); } },
+        // A spade knocking the frame.
+        { w: 2, play: function (A, d) { A.thud(0.040, 150, 0.18, 3.0, A.sfxBus, d); } },
+      ],
+    },
+    stunt: {
+      every: [3.0, 6.0],
+      voices: [
+        // Moulded track flexing under the weight of a car.
+        { w: 4, play: function (A, d) {
+            A.blip(420, 0.09, 'triangle', 0.026, 300, A.sfxBus, d);
+          } },
+        // A distant television, two floors of nothing in particular.
+        { w: 3, play: function (A, d) { A.gust(d, 1.9, 0.026, 260); } },
+        // Something plastic tapping the dresser.
+        { w: 3, play: function (A, d) {
+            A.blip(1500, 0.02, 'square', 0.024, 1200, A.sfxBus, d);
+          } },
+      ],
+    },
+  },
+
+  /* A long soft band of noise — wind, or a television through a wall. */
+  gust(delay, dur, vol, hz) {
+    if (!this.ready) return;
+    const ctx = this.ctx, at = ctx.currentTime + (delay || 0);
+    const src = ctx.createBufferSource();
+    src.buffer = this.noiseBuf; src.loop = true;
+    const f = ctx.createBiquadFilter();
+    f.type = 'bandpass'; f.frequency.value = hz; f.Q.value = 0.7;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(vol, at + dur * 0.4);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+    src.connect(f); f.connect(g); g.connect(this.sfxBus);
+    src.start(at); src.stop(at + dur + 0.05);
+  },
+
+  /* ITS OWN RANDOM NUMBERS, and this is not fussiness.
+     `Math.random` is the stream the AI's wander and mistake rolls come out of.
+     Audio runs once per RENDERED frame, so if ambience drew from it the
+     sequence the AI sees would depend on frame rate — and Time Trial ghosts
+     replay recorded inputs through a simulation that must land in the same
+     place every time. Sound would silently desync the game.
+     mulberry32, seeded once, touched by nothing else. */
+  _ambSeed: 20260819,
+  ambRandom() {
+    let s = this._ambSeed | 0;
+    s = (s + 0x6D2B79F5) | 0;
+    this._ambSeed = s;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  },
+
+  ambNext: 0,
+
+  ambience(racing) {
+    if (!this.ready || this.sfxVolume <= 0) return;
+    const ctx = this.ctx;
+    if (!racing) { this.ambNext = 0; return; }
+
+    const arena = BR.Game && BR.Game.arena;
+    const bed = this.AMBIENCE[(arena && arena.world) || 'town-rug'] ||
+                this.AMBIENCE['town-rug'];
+
+    // Resync after a backgrounded tab, exactly as the music scheduler does, or
+    // the catch-up loop fires every missed event at once.
+    if (this.ambNext === 0 || this.ambNext < ctx.currentTime - 1) {
+      this.ambNext = ctx.currentTime + 1.2;
+      return;
+    }
+    while (this.ambNext < ctx.currentTime + 0.4) {
+      const r = this.ambRandom();
+      let total = 0;
+      for (let i = 0; i < bed.voices.length; i++) total += bed.voices[i].w;
+      let pick = r * total, v = bed.voices[0];
+      for (let i = 0; i < bed.voices.length; i++) {
+        pick -= bed.voices[i].w;
+        if (pick <= 0) { v = bed.voices[i]; break; }
+      }
+      /* blip and thud take a delay RELATIVE to ctx.currentTime, so the
+         absolute instant this scheduler works in is converted here. Same
+         instant either way; the conversion just has to happen once, at the
+         boundary, rather than in every voice. */
+      v.play(this, this.ambNext - ctx.currentTime);
+      const lo = bed.every[0], hi = bed.every[1];
+      this.ambNext += lo + this.ambRandom() * (hi - lo);
+    }
+  },
 
   music(racing, RM) {
     if (!this.musicEnabled || this.musicVolume <= 0) return;
@@ -6876,6 +7548,568 @@ BR.SaveManager = {
       try { window.localStorage.removeItem(this.KEY); } catch (e) {}
     }
     this.saveNow();
+  },
+
+  /* ══ SAVE CODES ═══════════════════════════════════════════════════════════
+     15_Save_System.md open question 2. LocalStorage is per-origin AND per
+     browser profile, so a save is trapped in the browser that made it. There
+     is no server and never will be, so the only way progress crosses a machine
+     is if the player carries it: a code they copy out of one browser and paste
+     into another.
+
+     THE CODE CARRIES PROGRESS, NOT SETTINGS — the same line reset() draws,
+     from the other side. Volume, difficulty, minimap and auto-accelerate
+     describe the place you are playing (headphones or a tinny laptop, a phone
+     or a desk), and a code arriving from somewhere else has no business
+     overwriting them. reset() keeps settings and drops progress; import keeps
+     THIS device's settings and takes the progress. Both say the same thing:
+     progress belongs to the player, settings belong to the seat.
+
+     Shape:
+
+         BR01-CHK1234-ABCDE-FGHJK-…
+
+         BR       marker
+         01       save version, in plain digits so a code from a NEWER build is
+                  refused BEFORE a single byte of it is decoded
+         CHK1234  FNV-1a 32 of the payload, 7 base32 characters
+         rest     Crockford base32 of the payload, grouped in fives
+
+     Crockford base32 rather than base64: the code gets pasted by hand and
+     sometimes read aloud or retyped. It has no case, no punctuation, and no
+     0/O or 1/I/L confusion, so the usual transcription slips decode to the
+     same bytes instead of failing. Everything that is not an alphabet
+     character is stripped before parsing, so line wraps, spaces and stray
+     dashes are all harmless.
+
+     The payload is LZW-compressed when that helps. The data is JSON full of
+     repeated ids — 'sandbox-', '-01', the nine objective names over and over —
+     which is exactly what LZW eats. A method byte in front says which, so an
+     incompressible payload ships raw rather than growing.
+
+     Nothing is trusted. A code is decoded, checksummed, unpacked, parsed and
+     then type-checked field by field, and only when all of that passes is the
+     live save touched — see importCode(). A code that fails at any step leaves
+     the existing save exactly as it was.
+     ====================================================================== */
+
+  /* Crockford's alphabet: no I, L, O or U. */
+  CODE_ALPHABET: '0123456789ABCDEFGHJKMNPQRSTVWXYZ',
+  CODE_MEDALS: ['none', 'bronze', 'silver', 'gold', 'platinum'],
+  CODE_MEDAL_CHARS: 'NBSGP',
+
+  /* A hand-pasted code is never this long. The cap exists so a pathological
+     paste cannot make the decoder do real work before being refused. */
+  CODE_MAX_CHARS: 20000,
+  CODE_MAX_BYTES: 262144,
+
+  /* Mirrors MIGRATIONS above: version -> function upgrading a decoded PAYLOAD
+     to version+1. Empty at v1; the loop exists so the first one is a data
+     change rather than a refactor. */
+  CODE_MIGRATIONS: {
+  },
+
+  /* ── bytes ────────────────────────────────────────────────────────────── */
+
+  /* Hand-rolled rather than TextEncoder: this has to work inside whatever the
+     artifact host wraps the page in, and a dozen lines beats a capability
+     check. Ids are ASCII today, but a code should not corrupt itself the day
+     one is not. */
+  utf8Encode(s) {
+    const out = [];
+    for (let i = 0; i < s.length; i++) {
+      const c = s.charCodeAt(i);
+      if (c < 0x80) { out.push(c); continue; }
+      if (c < 0x800) { out.push(0xc0 | (c >> 6), 0x80 | (c & 63)); continue; }
+      if (c >= 0xd800 && c <= 0xdbff && i + 1 < s.length) {
+        const d = s.charCodeAt(i + 1);
+        if (d >= 0xdc00 && d <= 0xdfff) {
+          const cp = 0x10000 + ((c - 0xd800) << 10) + (d - 0xdc00);
+          out.push(0xf0 | (cp >> 18), 0x80 | ((cp >> 12) & 63),
+                   0x80 | ((cp >> 6) & 63), 0x80 | (cp & 63));
+          i++;
+          continue;
+        }
+      }
+      out.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63));
+    }
+    return out;
+  },
+
+  utf8Decode(b) {
+    let s = '';
+    for (let i = 0; i < b.length;) {
+      const c = b[i++];
+      if (c < 0x80) { s += String.fromCharCode(c); continue; }
+      const need = (c & 0xe0) === 0xc0 ? 1 : (c & 0xf0) === 0xe0 ? 2
+                 : (c & 0xf8) === 0xf0 ? 3 : -1;
+      if (need < 0 || i + need > b.length) return null;
+      let cp = c & (need === 1 ? 31 : need === 2 ? 15 : 7);
+      for (let k = 0; k < need; k++) {
+        const t = b[i++];
+        if ((t & 0xc0) !== 0x80) return null;
+        cp = (cp << 6) | (t & 63);
+      }
+      if (cp < 0x10000) s += String.fromCharCode(cp);
+      else {
+        const v = cp - 0x10000;
+        s += String.fromCharCode(0xd800 + (v >> 10), 0xdc00 + (v & 1023));
+      }
+    }
+    return s;
+  },
+
+  /* FNV-1a 32. Not a hash for security — it is a smoke alarm for a character
+     that got flipped, dropped or autocorrected somewhere between two browsers,
+     and it catches every single-character change in the encoded body. */
+  fnv1a(bytes) {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < bytes.length; i++) {
+      h ^= bytes[i];
+      h = Math.imul(h, 16777619) >>> 0;
+    }
+    return h >>> 0;
+  },
+
+  /* ── base32 ───────────────────────────────────────────────────────────── */
+
+  b32Encode(bytes) {
+    const A = this.CODE_ALPHABET;
+    let s = '', acc = 0, nb = 0;
+    for (let i = 0; i < bytes.length; i++) {
+      acc = (acc << 8) | bytes[i];
+      nb += 8;
+      while (nb >= 5) { nb -= 5; s += A.charAt((acc >> nb) & 31); acc &= (1 << nb) - 1; }
+    }
+    if (nb > 0) s += A.charAt((acc << (5 - nb)) & 31);
+    return s;
+  },
+
+  b32Decode(str) {
+    const A = this.CODE_ALPHABET;
+    const out = [];
+    let acc = 0, nb = 0;
+    for (let i = 0; i < str.length; i++) {
+      const v = A.indexOf(str.charAt(i));
+      if (v < 0) return null;                       // U, or anything else stray
+      acc = (acc << 5) | v;
+      nb += 5;
+      if (nb >= 8) { nb -= 8; out.push((acc >> nb) & 255); acc &= (1 << nb) - 1; }
+    }
+    /* The encoder pads with ZERO bits, so a non-zero remainder is a typo in the
+       last character, and a whole spare character is a code that grew. Without
+       this the final character carries bits nothing checks: fuzzing all 27249
+       single-character bends of a full-progress code found the last position was
+       the only one that got past the checksum. It still decoded correctly every
+       time — but a typo the code accepts in silence is a typo it should name. */
+    if (acc !== 0 || nb >= 5) return null;
+    return out;
+  },
+
+  /* A 32-bit value as exactly 7 alphabet characters (35 bits, so it always
+     fits and always has the same length — a short code is a broken code). */
+  chk32(n) {
+    const A = this.CODE_ALPHABET;
+    let s = '', v = n >>> 0;
+    for (let i = 0; i < 7; i++) { s = A.charAt(v % 32) + s; v = Math.floor(v / 32); }
+    return s;
+  },
+
+  /* ── LZW ──────────────────────────────────────────────────────────────────
+     Variable width, 9 to 15 bits, dictionary frozen when full.
+
+     The decoder is always exactly ONE entry behind the encoder — it cannot add
+     the entry for a code until it has read the next one. So the two grow their
+     code width off different counters: the encoder on `next`, the decoder on
+     `next + 1`. Get that wrong and the streams desynchronise thousands of
+     bytes in, which is why the harness fuzzes the round trip rather than
+     trusting a single sample. */
+  CODE_LZW_MAX: 32768,
+
+  lzwPack(bytes) {
+    /* A NULL-PROTOTYPE map, because the keys are arbitrary byte sequences. On
+       a plain object the sequence 'constructor' reads back as a function, so
+       the encoder would think it had already seen a string it never emitted
+       and produce a stream nothing can decode. */
+    const dict = Object.create(null);
+    for (let i = 0; i < 256; i++) dict[String.fromCharCode(i)] = i;
+    let next = 256, width = 9;
+    const out = [];
+    let acc = 0, nb = 0;
+
+    const emit = function (code) {
+      acc = (acc << width) | code;
+      nb += width;
+      while (nb >= 8) { nb -= 8; out.push((acc >> nb) & 255); }
+      acc &= (1 << nb) - 1;
+    };
+
+    let w = '';
+    for (let i = 0; i < bytes.length; i++) {
+      const ch = String.fromCharCode(bytes[i]);
+      const wc = w + ch;
+      if (dict[wc] !== undefined) { w = wc; continue; }
+      emit(dict[w]);
+      if (next < this.CODE_LZW_MAX) {
+        dict[wc] = next++;
+        if (next > (1 << width) && width < 15) width++;
+      }
+      w = ch;
+    }
+    if (w !== '') emit(dict[w]);
+    if (nb > 0) out.push((acc << (8 - nb)) & 255);
+    return out;
+  },
+
+  lzwUnpack(bytes) {
+    const dict = [];
+    for (let i = 0; i < 256; i++) dict.push(String.fromCharCode(i));
+    let next = 256, width = 9;
+    let bi = 0, acc = 0, nb = 0;
+
+    const take = function () {
+      while (nb < width) {
+        if (bi >= bytes.length) return -1;
+        acc = (acc << 8) | bytes[bi++];
+        nb += 8;
+      }
+      nb -= width;
+      const v = (acc >> nb) & ((1 << width) - 1);
+      acc &= (1 << nb) - 1;
+      return v;
+    };
+
+    const out = [];
+    let prev = null;
+    for (;;) {
+      const code = take();
+      if (code < 0) break;                       // only pad bits left
+      let entry;
+      if (code < dict.length) entry = dict[code];
+      else if (code === dict.length && prev !== null) entry = prev + prev.charAt(0);
+      else return null;                          // a code that was never defined
+
+      for (let i = 0; i < entry.length; i++) out.push(entry.charCodeAt(i));
+      if (out.length > this.CODE_MAX_BYTES) return null;
+
+      if (prev !== null && next < this.CODE_LZW_MAX) { dict.push(prev + entry.charAt(0)); next++; }
+      if (next + 1 > (1 << width) && width < 15) width++;
+      prev = entry;
+    }
+    return out;
+  },
+
+  /* ── the payload ──────────────────────────────────────────────────────────
+     Short keys and arrays, but FULL STRING IDS. Encoding events and pieces as
+     indexes into BR.EVENTS would halve the code and was rejected: content is
+     added between builds, so an index means a code written before a new event
+     silently lands its medals on the wrong ones. A string id is either known or
+     ignored. LZW pays most of the size back anyway, because the ids repeat. */
+  snapshot() {
+    const s = this.get();
+    const M = this.CODE_MEDAL_CHARS, ORD = this.CODE_MEDALS;
+
+    const e = {};
+    const src = s.progression.events || {};
+    for (const id in src) {
+      const r = src[id] || {};
+      const mi = ORD.indexOf(r.medal);
+      e[id] = [
+        M.charAt(mi < 0 ? 0 : mi),
+        (r.objectives || []).slice(),
+        r.played || 0,
+        (typeof r.bestTime === 'number' && isFinite(r.bestTime)) ? r.bestTime : null,
+      ];
+    }
+
+    const r = {};
+    const rsrc = s.records || {};
+    for (const id in rsrc) {
+      const t = rsrc[id] || {};
+      const lap = (typeof t.bestLap === 'number' && isFinite(t.bestLap)) ? t.bestLap : null;
+      const tot = (typeof t.bestTotal === 'number' && isFinite(t.bestTotal)) ? t.bestTotal : null;
+      if (lap === null && tot === null) continue;      // an empty row is noise
+      r[id] = [lap, tot];
+    }
+
+    return {
+      v: this.VERSION,
+      s: s.progression.stars || 0,
+      e: e,
+      r: r,
+      o: (s.ownership.vehicles || []).slice(),
+      p: (s.collection.piecesFound || []).slice(),
+      c: (s.collection.setsCompleted || []).slice(),
+      sv: s.state.selectedVehicle,
+    };
+  },
+
+  /**
+   * Build a save code for the current progress.
+   * @returns {string|null} null only if the code failed to verify against
+   *          itself, in which case handing it over would be worse than saying
+   *          no — a code that does not decode is a code that loses a save.
+   */
+  exportCode() {
+    const payload = this.snapshot();
+    const json = JSON.stringify(payload);
+    const raw = this.utf8Encode(json);
+
+    const packed = this.lzwPack(raw);
+    const body = (packed && packed.length < raw.length)
+      ? [1].concat(packed)
+      : [0].concat(raw);
+
+    const ver = ('0' + this.VERSION).slice(-2);
+    const code = 'BR' + ver + '-' + this.chk32(this.fnv1a(body)) + '-' +
+                 this.groupCode(this.b32Encode(body));
+
+    /* Decode what was just produced and compare. Encoding is the one step with
+       nobody downstream to catch it, and a broken code would only be
+       discovered on the machine that has nothing on it. */
+    const back = this.decodeCode(code);
+    if (!back.ok) return null;
+    if (JSON.stringify(back.payload) !== JSON.stringify(JSON.parse(json))) return null;
+    return code;
+  },
+
+  /* Fives, because a wall of 900 characters cannot be checked by eye and the
+     dashes are stripped on the way back in. */
+  groupCode(s) {
+    const parts = [];
+    for (let i = 0; i < s.length; i += 5) parts.push(s.substr(i, 5));
+    return parts.join('-');
+  },
+
+  /* Uppercase, fold Crockford's confusable characters, drop everything that is
+     not an alphabet character. That last step is what makes a code survive an
+     email client: line breaks, spaces, quotes and stray dashes all vanish. */
+  normaliseCode(str) {
+    return String(str).toUpperCase()
+      .replace(/O/g, '0')
+      .replace(/[IL]/g, '1')
+      .replace(/[^0-9A-Z]/g, '');
+  },
+
+  /**
+   * Decode and validate a code WITHOUT touching the save.
+   * @returns {{ok:true, payload:object, version:number}|{ok:false, reason:string}}
+   */
+  decodeCode(str) {
+    const NOPE = 'That does not look like a save code';
+    const BROKEN = 'That code is damaged — copy the whole thing again';
+
+    if (typeof str !== 'string' || !str) return { ok: false, reason: NOPE };
+    if (str.length > this.CODE_MAX_CHARS) return { ok: false, reason: NOPE };
+
+    const s = this.normaliseCode(str);
+    // 2 marker + 2 version + 7 checksum + at least one payload character.
+    if (s.length < 12) return { ok: false, reason: 'That code is too short to be whole' };
+    if (s.charAt(0) !== 'B' || s.charAt(1) !== 'R') return { ok: false, reason: NOPE };
+
+    const vs = s.substr(2, 2);
+    if (vs.charCodeAt(0) < 48 || vs.charCodeAt(0) > 57 ||
+        vs.charCodeAt(1) < 48 || vs.charCodeAt(1) > 57) {
+      return { ok: false, reason: NOPE };
+    }
+    const ver = parseInt(vs, 10);
+    if (ver < 1) return { ok: false, reason: NOPE };
+
+    /* Refused HERE, before the body is decoded at all. A newer build may mean
+       anything by these bytes; reading the half we recognise is how a save ends
+       up plausible and wrong. */
+    if (ver > this.VERSION) {
+      return { ok: false, reason: 'That code is from a newer version of the game' };
+    }
+
+    const bytes = this.b32Decode(s.substr(11));
+    if (!bytes || !bytes.length) return { ok: false, reason: BROKEN };
+    if (this.chk32(this.fnv1a(bytes)) !== s.substr(4, 7)) return { ok: false, reason: BROKEN };
+
+    let raw;
+    if (bytes[0] === 0) raw = bytes.slice(1);
+    else if (bytes[0] === 1) raw = this.lzwUnpack(bytes.slice(1));
+    else return { ok: false, reason: BROKEN };
+    if (!raw) return { ok: false, reason: BROKEN };
+
+    const json = this.utf8Decode(raw);
+    if (json === null) return { ok: false, reason: BROKEN };
+
+    let payload;
+    try { payload = JSON.parse(json); } catch (e) { return { ok: false, reason: BROKEN }; }
+
+    /* The version is stated TWICE — once in the clear, so it can be refused
+       before anything is decoded, and once inside the payload. They must agree,
+       or a body has been spliced onto a header that lies about it. */
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload) ||
+        payload.v !== ver) {
+      return { ok: false, reason: BROKEN };
+    }
+
+    try { payload = this.migrateCode(payload, ver); }
+    catch (e) { return { ok: false, reason: BROKEN }; }
+
+    const fault = this.codeFault(payload);
+    if (fault) return { ok: false, reason: fault };
+
+    return { ok: true, payload: payload, version: ver };
+  },
+
+  migrateCode(payload, ver) {
+    let v = ver;
+    while (v < this.VERSION) {
+      const step = this.CODE_MIGRATIONS[v];
+      if (!step) { v = this.VERSION; break; }
+      payload = step(payload);
+      v++;
+    }
+    if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+      payload.v = this.VERSION;
+    }
+    return payload;
+  },
+
+  /* ── validation ───────────────────────────────────────────────────────────
+     Type-checked field by field rather than merged optimistically. merge() is
+     right for a save this build wrote; a save code arrives from outside and may
+     be anything at all, and half-reading it is exactly the failure the version
+     check exists to prevent. One bad field rejects the whole code. */
+
+  isCodeId(s) {
+    if (typeof s !== 'string' || !s.length || s.length > 64) return false;
+    // Assigning these as object keys would reach the prototype, not the map.
+    return s !== '__proto__' && s !== 'constructor' && s !== 'prototype';
+  },
+
+  isCodeIdList(a, max) {
+    if (!Array.isArray(a) || a.length > max) return false;
+    for (let i = 0; i < a.length; i++) if (!this.isCodeId(a[i])) return false;
+    return true;
+  },
+
+  isCodeCount(n, max) {
+    return typeof n === 'number' && isFinite(n) && n >= 0 &&
+           n === Math.floor(n) && n <= max;
+  },
+
+  isCodeTime(t) {
+    return t === null || (typeof t === 'number' && isFinite(t) && t >= 0 && t < 1e9);
+  },
+
+  codeFault(p) {
+    const BAD = 'That code does not hold readable progress';
+    if (!p || typeof p !== 'object' || Array.isArray(p)) return BAD;
+    if (p.v !== this.VERSION) return BAD;
+    if (!this.isCodeCount(p.s, 100000)) return BAD;
+    if (!p.e || typeof p.e !== 'object' || Array.isArray(p.e)) return BAD;
+    if (!p.r || typeof p.r !== 'object' || Array.isArray(p.r)) return BAD;
+    if (!this.isCodeIdList(p.o, 400)) return BAD;
+    if (!this.isCodeIdList(p.p, 4000)) return BAD;
+    if (!this.isCodeIdList(p.c, 400)) return BAD;
+    if (p.sv !== undefined && p.sv !== null && !this.isCodeId(p.sv)) return BAD;
+
+    let n = 0;
+    for (const id in p.e) {
+      if (++n > 2000 || !this.isCodeId(id)) return BAD;
+      const a = p.e[id];
+      if (!Array.isArray(a) || a.length !== 4) return BAD;
+      if (typeof a[0] !== 'string' || a[0].length !== 1 ||
+          this.CODE_MEDAL_CHARS.indexOf(a[0]) < 0) return BAD;
+      if (!this.isCodeIdList(a[1], 64)) return BAD;
+      if (!this.isCodeCount(a[2], 1e7)) return BAD;
+      if (!this.isCodeTime(a[3])) return BAD;
+    }
+
+    n = 0;
+    for (const id in p.r) {
+      if (++n > 2000 || !this.isCodeId(id)) return BAD;
+      const a = p.r[id];
+      if (!Array.isArray(a) || a.length !== 2) return BAD;
+      if (!this.isCodeTime(a[0]) || !this.isCodeTime(a[1])) return BAD;
+    }
+    return null;
+  },
+
+  /* What a code holds, for the confirmation that names both sides before
+     anything is replaced. */
+  codeTally(p) {
+    let medals = 0;
+    for (const id in p.e) if (p.e[id][0] !== 'N') medals++;
+    return { stars: p.s || 0, medals: medals, pieces: (p.p || []).length,
+             vehicles: (p.o || []).length };
+  },
+
+  /** The same tally for whatever is in the save right now. */
+  saveTally() {
+    const s = this.get();
+    const evs = s.progression.events || {};
+    let medals = 0;
+    for (const id in evs) if (evs[id] && evs[id].medal && evs[id].medal !== 'none') medals++;
+    return { stars: s.progression.stars || 0, medals: medals,
+             pieces: (s.collection.piecesFound || []).length,
+             vehicles: (s.ownership.vehicles || []).length };
+  },
+
+  /**
+   * Replace progress with what a code holds. DESTRUCTIVE, and deliberately the
+   * last thing that happens: decodeCode() has already proved the whole code
+   * before a single field is written, so a bad code cannot leave a half-import
+   * behind. On failure the live save has not been touched at all.
+   *
+   * Built from defaults() outward rather than merged over the old save, so
+   * anything the code does not carry comes back at its default instead of
+   * being inherited from whoever was playing here before.
+   *
+   * Written through saveNow(): the player has just confirmed a destructive
+   * action, and a refresh one tick later must not resurrect what it replaced.
+   *
+   * @returns {{ok:true, tally:object}|{ok:false, reason:string}}
+   */
+  importCode(str) {
+    const res = this.decodeCode(str);
+    if (!res.ok) return res;
+
+    const p = res.payload;
+    const cur = this.get();
+    const next = this.defaults();
+
+    // This device's settings stay put — see the note at the top of this block.
+    next.settings = cur.settings;
+    // The code carries no timestamps: `created` describes this save slot, not
+    // the progress that just moved into it.
+    next.created = cur.created;
+
+    next.progression.stars = p.s;
+    const evs = {};
+    for (const id in p.e) {
+      const a = p.e[id];
+      evs[id] = {
+        medal: this.CODE_MEDALS[this.CODE_MEDAL_CHARS.indexOf(a[0])],
+        objectives: a[1].slice(),
+        played: a[2],
+        bestTime: a[3],
+      };
+    }
+    next.progression.events = evs;
+
+    const recs = {};
+    for (const id in p.r) recs[id] = { bestLap: p.r[id][0], bestTotal: p.r[id][1] };
+    next.records = recs;
+
+    next.ownership.vehicles = p.o.slice();
+    next.collection.piecesFound = p.p.slice();
+    next.collection.setsCompleted = p.c.slice();
+
+    /* Only if the code actually owns it. An unowned selection is repaired
+       downstream by selectedVehicleFor(), but starting from a coherent state
+       beats relying on the repair. */
+    if (typeof p.sv === 'string' && p.o.indexOf(p.sv) !== -1) {
+      next.state.selectedVehicle = p.sv;
+    }
+
+    this.data = next;
+    this.saveNow();
+    return { ok: true, tally: this.codeTally(p) };
   },
 
   get() {
@@ -9510,6 +10744,67 @@ BR.Renderer = {
       ctx.stroke();
     }
 
+    /* ── DRIFT CHARGE ──────────────────────────────────────────────────────
+       `v.driftCharge` is commented "DISPLAY ONLY" in Vehicle.js and was
+       displayed NOWHERE. The only thing reading it was Debug.js, which is
+       stripped from the shipped bundle — so a value whose entire purpose is to
+       be shown was invisible in the actual game.
+
+       That also broke a stated rule. 13_Audio.md: "All gameplay-critical audio
+       must have a visual equivalent - no information exists in sound alone",
+       and the same document calls the drift-charge-full cue "the single most
+       important sound in the game". It had no visual equivalent at all.
+
+       03_Driving_Physics.md open question 3 asks whether drift needs a VISIBLE
+       CHARGE TIER, "given we rejected discrete tiers". Both halves can be true:
+       the mechanic stays continuous, and only the PRESENTATION is quantised.
+       A bar creeping up is unreadable in the middle of a slide, when the car is
+       sideways and the player is looking at the apex. A pip lighting is a
+       single unmistakable event, seen without being looked at.
+
+       Lit versus unlit rather than hue-versus-hue, so it survives colour
+       blindness — the brightness and the fill both carry it. */
+    if (isPlayer && v.driftCharge > 0.02) {
+      const g = anchor;
+      const rr = spec.length * 1.12 * shrinkK;
+      const N = 3;
+      const gap = 0.30;                       // radians of space between pips
+      const span = (Math.PI * 2 - gap * N) / N;
+      // Fades out as the charge decays after a drift is released, so the pips
+      // do not linger over a car that is no longer earning anything.
+      ctx.globalAlpha = Math.min(1, v.driftCharge * 4);
+
+      for (let t = 0; t < N; t++) {
+        // Filled proportionally WITHIN the tier, so it is a meter up close and
+        // three pips at a glance. The quantised read is the point; the partial
+        // fill just stops it feeling like it jumps from nothing.
+        const lo = t / N, hi = (t + 1) / N;
+        const f = BR.M.clamp((v.driftCharge - lo) / (hi - lo), 0, 1);
+        const a0 = -Math.PI / 2 + t * (span + gap);
+
+        // The empty socket, always drawn, so you can see what is still to earn.
+        ctx.beginPath();
+        ctx.ellipse(g.sx, g.sy, rr, rr * Pj.groundTilt, 0, a0, a0 + span);
+        ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+        ctx.lineWidth = 2 / BR.Renderer.zoom + 1;
+        ctx.stroke();
+
+        if (f > 0.001) {
+          ctx.beginPath();
+          ctx.ellipse(g.sx, g.sy, rr, rr * Pj.groundTilt, 0, a0, a0 + span * f);
+          /* Same colour language as the boost ring directly inside it, because
+             this charge becomes that boost: blue while it is only building,
+             green once the tier is banked, gold on the last one. */
+          ctx.strokeStyle = f >= 1
+            ? (t === N - 1 ? '#ffd34d' : '#4fd8a8')
+            : '#69a2ff';
+          ctx.lineWidth = 3 / BR.Renderer.zoom + 1.6;
+          ctx.stroke();
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
+
     /* ── which way is up ───────────────────────────────────────────────────
        Upright, up is (0,0,1) and this is the extrusion it has always been.
        On a ride it comes from the rail: a loop swings it backwards through the
@@ -10682,6 +11977,15 @@ BR.Screens = {
        could not choose an event, pick a car, or leave the pause menu without
        somebody reaching for a mouse. */
     window.addEventListener('keydown', function (e) {
+      /* The save-code panel is real DOM sitting over the canvas, and this
+         listener is on `window` — so every character typed into its textarea
+         would ALSO arrive here as menu navigation. Pasting a code would scroll
+         the event list and Escape would walk out of the screen mid-paste.
+         While the panel is open it owns the keyboard. */
+      if (self.panel) {
+        if (e.key === 'Escape') { e.preventDefault(); self.closePanel(); }
+        return;
+      }
       if (self.state === self.RACE && !BR.Game.paused) return;
       switch (e.key) {
         case 'ArrowDown': case 'ArrowRight':
@@ -10799,6 +12103,9 @@ BR.Screens = {
     // Leaving the screen disarms the reset. A destructive action must never sit
     // primed while the player is somewhere else.
     this.resetArmed = false;
+    // Same rule for the save-code panel, which can be sitting on a confirmation
+    // that would replace everything.
+    this.closePanel();
   },
 
   say(msg) { this.toast = msg; this.toastTime = 2.6; },
@@ -10875,6 +12182,13 @@ BR.Screens = {
         break;
       }
 
+      /* ── save codes ──────────────────────────────────────────────────────
+         15_Save_System.md open question 2. Both open the same panel; the panel
+         is where the friction lives, because importing destroys progress and a
+         one-press button that eats a save is not acceptable. */
+      case 'saveExport': this.openExport(); break;
+      case 'saveImport': this.openImport(); break;
+
       case 'goto':    this.set(r.value); break;
       case 'start':   G.startEvent(BR.eventById(r.value)); break;
       case 'slot':
@@ -10904,6 +12218,309 @@ BR.Screens = {
         BR.Audio.checkpoint();
         break;
     }
+  },
+
+  /* ── the save-code panel ──────────────────────────────────────────────────
+     The one piece of real DOM this game puts on the screen, and it is here
+     because a save code is a THOUSAND characters that have to be selected,
+     copied, and pasted back. A canvas cannot be selected and it cannot receive
+     a paste; navigator.clipboard needs a permission the artifact host may not
+     grant; window.prompt is a single-line box that throws the pasted text away
+     the moment the code is rejected, which on a long code is the difference
+     between fixing a paste and giving up.
+
+     A textarea does all three jobs and degrades to the same floor every time:
+     THE CODE IS VISIBLE AND SELECTABLE. Every clipboard convenience layered on
+     top of that is allowed to fail.
+
+     It is also where the destructive confirmation lives. Import is the only
+     action in the game that can destroy progress the player did not choose to
+     destroy, so like RESET PROGRESS it takes two presses, and the second names
+     what is going and what is arriving rather than asking "are you sure".
+     ────────────────────────────────────────────────────────────────────── */
+
+  panel: null,
+
+  el(tag, style, text) {
+    const e = document.createElement(tag);
+    // Set through CSSOM, never as a style ATTRIBUTE: the published page runs
+    // under a CSP with no unsafe-inline, which blocks the attribute form.
+    if (style) for (const k in style) e.style[k] = style[k];
+    if (text !== undefined) e.textContent = text;
+    return e;
+  },
+
+  tallyWords(t) {
+    const bits = [];
+    if (t.stars)  bits.push(t.stars  + (t.stars  === 1 ? ' star'  : ' stars'));
+    if (t.medals) bits.push(t.medals + (t.medals === 1 ? ' medal' : ' medals'));
+    if (t.pieces) bits.push(t.pieces + (t.pieces === 1 ? ' toy piece' : ' toy pieces'));
+    if (!bits.length) return 'nothing yet';
+    return bits.join(', ');
+  },
+
+  closePanel() {
+    if (!this.panel) return;
+    try {
+      const b = this.panel.back;
+      if (b && b.parentNode) b.parentNode.removeChild(b);
+    } catch (e) { /* already gone */ }
+    this.panel = null;
+  },
+
+  /**
+   * Build the panel shell. Returns the panel record, or null if there is no
+   * document to attach to — in which case the caller falls back to a toast
+   * rather than throwing.
+   */
+  openPanel(title, hint) {
+    this.closePanel();
+    const self = this;
+    if (typeof document === 'undefined' || !document.body) return null;
+
+    const back = this.el('div', {
+      position: 'fixed', left: '0', top: '0', right: '0', bottom: '0',
+      background: 'rgba(10,9,8,0.86)', zIndex: '9999',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: '16px',
+    });
+
+    const card = this.el('div', {
+      width: '560px', maxWidth: '100%', boxSizing: 'border-box',
+      background: '#191614', border: '1px solid rgba(255,255,255,0.16)',
+      borderRadius: '10px', padding: '16px',
+      fontFamily: 'ui-monospace, Consolas, monospace',
+      color: '#ece6da', fontSize: '12px', lineHeight: '1.5',
+      boxShadow: '0 18px 44px rgba(0,0,0,0.6)',
+    });
+
+    const head = this.el('div', {
+      fontSize: '13px', fontWeight: '800', letterSpacing: '0.04em',
+      color: '#ffd34d', marginBottom: '8px',
+    }, title);
+
+    const note = this.el('div', {
+      color: 'rgba(255,255,255,0.62)', marginBottom: '10px',
+    }, hint);
+
+    const area = this.el('textarea', {
+      width: '100%', height: '132px', boxSizing: 'border-box',
+      background: '#0f0d0c', color: '#ece6da',
+      border: '1px solid rgba(255,255,255,0.18)', borderRadius: '6px',
+      padding: '8px', fontFamily: 'ui-monospace, Consolas, monospace',
+      fontSize: '12px', lineHeight: '1.45', resize: 'vertical',
+      // A code has no words in it, so wrapping mid-"word" is the correct thing
+      // to do — otherwise it draws as one unbreakable 1000-character line.
+      wordBreak: 'break-all',
+    });
+    area.spellcheck = false;
+    area.autocapitalize = 'off';
+    area.autocomplete = 'off';
+    area.setAttribute('autocorrect', 'off');
+
+    const status = this.el('div', {
+      minHeight: '16px', marginTop: '8px', color: 'rgba(255,255,255,0.55)',
+    }, '');
+
+    const row = this.el('div', {
+      display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '10px',
+    });
+
+    card.appendChild(head);
+    card.appendChild(note);
+    card.appendChild(area);
+    card.appendChild(status);
+    card.appendChild(row);
+    back.appendChild(card);
+
+    // Clicking the dark surround leaves. Clicking the card must not.
+    back.addEventListener('click', function (e) {
+      if (e.target === back) self.closePanel();
+    });
+
+    document.body.appendChild(back);
+    this.panel = { back: back, card: card, head: head, note: note,
+                   area: area, status: status, row: row };
+    return this.panel;
+  },
+
+  panelSay(msg, colour) {
+    if (!this.panel) return;
+    this.panel.status.textContent = msg;
+    this.panel.status.style.color = colour || 'rgba(255,255,255,0.55)';
+  },
+
+  /* Buttons are rebuilt rather than toggled, because the confirmation step
+     replaces them entirely and a leftover handler on a hidden button is how a
+     destructive action gets fired by the wrong press. */
+  panelButtons(defs) {
+    if (!this.panel) return;
+    const row = this.panel.row;
+    while (row.firstChild) row.removeChild(row.firstChild);
+    for (let i = 0; i < defs.length; i++) {
+      const d = defs[i];
+      const b = this.el('button', {
+        appearance: 'none', cursor: 'pointer',
+        padding: '9px 14px', borderRadius: '7px',
+        fontFamily: 'ui-monospace, Consolas, monospace',
+        fontSize: '11px', fontWeight: '700', letterSpacing: '0.03em',
+        background: d.danger ? 'rgba(255,107,107,0.16)'
+                  : d.primary ? '#ffd34d' : 'rgba(255,255,255,0.08)',
+        color: d.danger ? '#ffb3b3' : d.primary ? '#221e1b' : '#ece6da',
+        border: d.danger ? '2px solid #ff6b6b' : '1px solid rgba(255,255,255,0.18)',
+      }, d.label);
+      b.type = 'button';
+      b.addEventListener('click', d.on);
+      row.appendChild(b);
+    }
+  },
+
+  /* ── export ─────────────────────────────────────────────────────────────*/
+
+  openExport() {
+    const SM = BR.SaveManager;
+    const code = SM.exportCode();
+    if (!code) {
+      // exportCode() verifies its own output and returns null rather than hand
+      // over a code that will not decode. Saying nothing would be worse.
+      this.say('Could not build a save code');
+      return;
+    }
+    const t = SM.saveTally();
+    const self = this;
+
+    const p = this.openPanel('YOUR SAVE CODE',
+      'Copy all of it into Bedroom Racers in another browser to bring ' +
+      this.tallyWords(t) + ' across. It does not carry your settings — volume, ' +
+      'difficulty and the minimap stay with each browser.');
+    if (!p) { this.say('Could not open the save code'); return; }
+
+    p.area.value = code;
+    p.area.readOnly = true;
+    p.area.focus();
+    p.area.select();
+    // select() leaves the caret at the end, which scrolls the box to the TAIL of
+    // the code — the player opens the panel and sees the middle of a string with
+    // no BR01 on it. Put it back to the top; the selection survives the scroll.
+    p.area.scrollTop = 0;
+    this.panelSay('Select it and copy, or press COPY.');
+
+    this.panelButtons([
+      { label: 'COPY', primary: true, on: function () {
+          self.copyToClipboard(code, function (ok) {
+            if (!self.panel) return;
+            if (ok) self.panelSay('Copied.', '#7fe06a');
+            else self.panelSay('This browser would not let the game reach the ' +
+                               'clipboard — select the code above and copy it.',
+                               '#ff9d6b');
+          });
+        } },
+      { label: 'DONE', on: function () { self.closePanel(); } },
+    ]);
+  },
+
+  /* Clipboard, then the old execCommand path, then nothing — and "nothing" is
+     survivable because the code is already on screen and selectable. The async
+     API needs a secure context and a permission the artifact host controls, so
+     it is tried but never relied on. */
+  copyToClipboard(text, done) {
+    const self = this;
+    const nav = window.navigator;
+    if (nav && nav.clipboard && nav.clipboard.writeText) {
+      try {
+        const pr = nav.clipboard.writeText(text);
+        if (pr && pr.then) {
+          pr.then(function () { done(true); },
+                  function () { done(self.copyLegacy(text)); });
+          return;
+        }
+        done(true);
+        return;
+      } catch (e) { /* fall through to the legacy path */ }
+    }
+    done(this.copyLegacy(text));
+  },
+
+  copyLegacy(text) {
+    try {
+      const ta = this.el('textarea',
+        { position: 'fixed', left: '-9999px', top: '0', opacity: '0' });
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = !!(document.execCommand && document.execCommand('copy'));
+      document.body.removeChild(ta);
+      return ok;
+    } catch (e) { return false; }
+  },
+
+  /* ── import ─────────────────────────────────────────────────────────────*/
+
+  openImport() {
+    const self = this;
+    const p = this.openPanel('PASTE A SAVE CODE',
+      'Paste the code from your other browser. Nothing on this browser changes ' +
+      'until you confirm.');
+    if (!p) { this.say('Could not open the save code box'); return; }
+
+    p.area.value = '';
+    p.area.readOnly = false;
+    p.area.focus();
+
+    this.panelButtons([
+      { label: 'CHECK THE CODE', primary: true,
+        on: function () { self.checkImport(); } },
+      { label: 'CANCEL', on: function () { self.closePanel(); } },
+    ]);
+  },
+
+  /* Decode ONLY. Nothing is written here — a rejected code must leave both the
+     save and the pasted text exactly where they were, so the player can fix a
+     truncated paste instead of starting again. */
+  checkImport() {
+    if (!this.panel) return;
+    const SM = BR.SaveManager, self = this;
+    const text = this.panel.area.value;
+
+    const res = SM.decodeCode(text);
+    if (!res.ok) { this.panelSay(res.reason, '#ff8f8f'); return; }
+
+    const bring = SM.codeTally(res.payload);
+    const have = SM.saveTally();
+
+    // Nothing to lose: no confirmation to give. The two-step exists to protect
+    // progress, and an empty save has none.
+    if (!have.stars && !have.medals && !have.pieces) { this.applyImport(text); return; }
+
+    this.panel.head.textContent = 'REPLACE YOUR PROGRESS?';
+    this.panel.note.textContent =
+      'That code holds ' + this.tallyWords(bring) + '. ' +
+      'This browser has ' + this.tallyWords(have) + ', and all of it — ' +
+      'plus every lap record — is replaced. This cannot be undone. ' +
+      'Your settings are kept.';
+    this.panel.area.readOnly = true;
+    this.panelSay('');
+
+    this.panelButtons([
+      { label: 'YES, REPLACE IT', danger: true,
+        on: function () { self.applyImport(text); } },
+      { label: 'KEEP WHAT I HAVE', on: function () { self.closePanel(); } },
+    ]);
+  },
+
+  applyImport(text) {
+    const res = BR.SaveManager.importCode(text);
+    if (!res.ok) { this.panelSay(res.reason, '#ff8f8f'); return; }
+
+    // Repair anything the code could not carry: unlocks the current build
+    // grants for those stars, and the four vehicle slots.
+    BR.ProgressionManager.applyUnlocks();
+    BR.Game.refreshPlayerVehicles();
+
+    this.closePanel();
+    this.set(this.MENU);
+    this.say('Progress restored — ' + this.tallyWords(res.tally));
   },
 
   /* ── drawing ───────────────────────────────────────────────────────────── */
@@ -11277,57 +12894,75 @@ BR.Screens = {
     ctx.fillText(this.DIFF_BLURB[cur] || '', cx, by + 44);
     ctx.textAlign = 'left';
 
-    /* ── reset progress ────────────────────────────────────────────────────
-       15_Save_System.md open question 4. Deliberately the smallest, dimmest
-       control on the screen — it must be findable, not inviting.
+    /* ── save codes and reset progress ─────────────────────────────────────
+       15_Save_System.md open questions 2 and 4, in one row of small, dim
+       controls — they must be findable, not inviting.
 
-       Only appears once there is something to lose. Offering to erase an empty
-       save is noise, and it is the one button whose absence nobody misses. */
-    const save = BR.SaveManager.get();
-    const stars = P.stars();
-    const evs = save.progression.events || {};
-    let medals = 0;
-    for (const k in evs) if (evs[k] && evs[k].medal) medals++;
-    const pieces = (save.collection.piecesFound || []).length;
+       COUNTED THROUGH SaveManager.saveTally(), not by walking the events map
+       here. This used to count any event with a truthy `medal`, and 'none' is
+       truthy: drawEvents calls eventRecord() for every event, which CREATES a
+       {medal:'none'} row, so simply opening the event list on a fresh save gave
+       the player eighteen medals and offered to erase them.
 
-    if (stars > 0 || medals > 0 || pieces > 0) {
-      /* Pinned near the bottom, but NEVER above the end of the flowed content.
-         Bottom-anchoring alone put it straight on top of the difficulty buttons
-         at 820x420 and below — and because hit() takes the last matching region,
-         the reset won: a press aimed at DIFFICULTY armed a destructive control.
-         Taking the max keeps it low on a normal window and clear of everything
-         on a short one.
+       USE A SAVE CODE is always here, including on an empty save — a brand new
+       browser is precisely where somebody needs to bring progress IN, and it is
+       the one case where importing destroys nothing. Copying out and resetting
+       only appear once there is something to copy or lose. */
+    const t = BR.SaveManager.saveTally();
+    const hasProgress = t.stars > 0 || t.medals > 0 || t.pieces > 0;
 
-         `by` is the difficulty row; its blurb ends around by + 52, and the armed
-         state needs two lines above the buttons, so by + 70 is the first safe y. */
-      const ry = Math.max(h - 52, by + 70);
-      if (!this.resetArmed) {
-        this.button(ctx, cx - 70, ry, 140, 24, 'RESET PROGRESS',
-                    'resetArm', null, { small: true });
-      } else {
-        /* Armed. The confirm names the actual numbers rather than asking "are
-           you sure" — a player who has forgotten they have 14 stars deserves to
-           be told before they press it, not after. */
-        const bits = [];
-        if (stars)  bits.push(stars  + (stars  === 1 ? ' star'  : ' stars'));
-        if (medals) bits.push(medals + (medals === 1 ? ' medal' : ' medals'));
-        if (pieces) bits.push(pieces + (pieces === 1 ? ' piece' : ' pieces'));
+    /* Pinned near the bottom, but NEVER above the end of the flowed content.
+       Bottom-anchoring alone put it straight on top of the difficulty buttons
+       at 820x420 and below — and because hit() takes the last matching region,
+       the reset won: a press aimed at DIFFICULTY armed a destructive control.
+       Taking the max keeps it low on a normal window and clear of everything
+       on a short one.
 
+       `by` is the difficulty row; its blurb ends around by + 52, and the armed
+       state needs two lines above the buttons, so by + 70 is the first safe y.
+       The save-code row is deliberately the SAME row rather than a second one:
+       a second row would have to start higher, and at 900x500 that is already
+       on top of the difficulty blurb. */
+    const ry = Math.max(h - 52, by + 70);
+
+    if (hasProgress && this.resetArmed) {
+      /* Armed. The confirm names the actual numbers rather than asking "are
+         you sure" — a player who has forgotten they have 14 stars deserves to
+         be told before they press it, not after. */
+      ctx.textAlign = 'center';
+      ctx.font = '700 11px ui-monospace, Consolas, monospace';
+      ctx.fillStyle = '#ff8f8f';
+      ctx.fillText('Erase ' + this.tallyWords(t) + ' and every lap record?',
+                   cx, ry - 16);
+      ctx.font = '600 10px ui-monospace, Consolas, monospace';
+      ctx.fillStyle = 'rgba(255,255,255,0.38)';
+      ctx.fillText('This cannot be undone. Settings are kept.', cx, ry - 3);
+      ctx.textAlign = 'left';
+
+      this.button(ctx, cx - 150, ry + 6, 144, 26, 'YES, ERASE IT ALL',
+                  'resetConfirm', null, { small: true, danger: true });
+      this.button(ctx, cx + 6, ry + 6, 144, 26, 'KEEP MY PROGRESS',
+                  'goto', this.MENU, { small: true });
+    } else if (hasProgress) {
+      // Only labelled when the label has somewhere to go: on a short window the
+      // caption would land in the difficulty blurb.
+      if (ry - 13 >= by + 58) {
         ctx.textAlign = 'center';
-        ctx.font = '700 11px ui-monospace, Consolas, monospace';
-        ctx.fillStyle = '#ff8f8f';
-        ctx.fillText('Erase ' + bits.join(', ') + ' and every lap record?',
-                     cx, ry - 16);
         ctx.font = '600 10px ui-monospace, Consolas, monospace';
-        ctx.fillStyle = 'rgba(255,255,255,0.38)';
-        ctx.fillText('This cannot be undone. Settings are kept.', cx, ry - 3);
+        ctx.fillStyle = 'rgba(255,255,255,0.30)';
+        ctx.fillText('A save code moves progress to another browser', cx, ry - 13);
         ctx.textAlign = 'left';
-
-        this.button(ctx, cx - 150, ry + 6, 144, 26, 'YES, ERASE IT ALL',
-                    'resetConfirm', null, { small: true, danger: true });
-        this.button(ctx, cx + 6, ry + 6, 144, 26, 'KEEP MY PROGRESS',
-                    'goto', this.MENU, { small: true });
       }
+      const bw3 = 108, bg3 = 6, x0 = cx - (bw3 * 3 + bg3 * 2) / 2;
+      this.button(ctx, x0, ry, bw3, 24, 'COPY MY CODE',
+                  'saveExport', null, { small: true });
+      this.button(ctx, x0 + bw3 + bg3, ry, bw3, 24, 'USE A CODE',
+                  'saveImport', null, { small: true });
+      this.button(ctx, x0 + (bw3 + bg3) * 2, ry, bw3, 24, 'RESET PROGRESS',
+                  'resetArm', null, { small: true });
+    } else {
+      this.button(ctx, cx - 80, ry, 160, 24, 'USE A SAVE CODE',
+                  'saveImport', null, { small: true });
     }
 
     if (!BR.SaveManager.storageOk) {
@@ -11915,10 +13550,26 @@ BR.Game = {
          holds. */
       const field = availableField;
       const n = opponentCount;
+
+      /* THE SLOTS THE HUMANS ARE IN ARE SKIPPED, not driven over. This was
+         `grid[i]`, written when the player started dead last and every opponent
+         really was in front of them. `PLAYER_START_BEHIND` put the player in
+         the MIDDLE of the grid and left this loop counting from the front, so
+         the i-th opponent was handed the box a human was already sitting in:
+         measured on Rug Route, the player and the Blue Buggy spawned 0.0 units
+         apart — the same coordinates, one car inside another — while five of
+         the eight slots stood empty. */
+      const taken = {};
+      for (let i = 0; i < humanCount; i++) {
+        taken[Math.min(back + i, grid.length - 1)] = true;
+      }
+      const freeSlots = [];
+      for (let i = 0; i < grid.length; i++) if (!taken[i]) freeSlots.push(grid[i]);
+
       for (let i = 0; i < n; i++) {
         const spec = field[i % field.length];
-        // The front of the grid. The player is behind all of them.
-        const g = grid[i];
+        // Front of the grid first, then around the humans sitting in it.
+        const g = freeSlots[i];
         const car = BR.Vehicle.create(spec.vehicle, g.x, g.y, g.heading);
         this.vehicles.push(car);
         this.gridSlots.push(g);
