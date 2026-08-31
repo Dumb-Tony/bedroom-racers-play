@@ -9731,7 +9731,13 @@ BR.Renderer = {
        costing 92-98% as much to draw. */
     this.setCullBounds(view);
 
+    /* The room comes in two halves and the ground goes between them. The floor
+       beyond the play surface, and the shadow the surface drops on it, must be
+       UNDER it; everything that stands up must be over it, because drawGround
+       fills the whole bounds quad in one pass with no regard for depth. */
+    this.drawRoomFloor(ctx, arena);
     this.drawGround(ctx, arena);
+    this.drawRoom(ctx, arena);
     this.drawRoad(ctx, arena);
     this.drawDecoration(ctx, arena);
     this.drawBoostPads(ctx, arena);
@@ -9918,6 +9924,658 @@ BR.Renderer = {
      the under-bed and night-light states want their own. */
   DEFAULT_HAZE: '198,176,140',
   _fadeCache: null,
+
+  /* ══ THE ROOM ══════════════════════════════════════════════════════════════
+     What lies BEYOND the play surface.
+
+     Until now the world stopped at `arena.bounds` and outside it was the
+     cleared canvas — flat dark nothing. That is the one thing left undoing the
+     rug. 12_Art_Guide.md argues at length that a rug is an OBJECT LYING ON A
+     FLOOR and what says so is that it stops; then it stopped against nothing,
+     and a thing lying on nothing is not lying on anything. Same for the rest:
+     a sandpit with no ground under it is a sand-coloured rectangle, and a
+     table with a 420-unit drop off the side is only a table if you can see
+     what you would land on.
+
+     WHAT THIS IS NOT is a modelled bedroom. Every rule below exists to keep the
+     room from competing with the track:
+
+       - It is DIM. Floors are darkened and desaturated against the surface
+         they surround, and nothing out here carries a bright hue or a hard
+         pale edge — pale hard edges are the kerb's, and stay the kerb's.
+       - It is BEYOND THE BARRIER, always. The nearest thing the room draws is
+         at `arena.bounds`, which is the outer road edge plus 400: past the
+         wall, and on the rug past the binding tape as well.
+       - It is HAZED, for free. `drawDepthFade` runs in screen space after
+         everything, and the room lives in the top of the frame where the fade
+         is strongest, so it comes out of the same atmosphere the far track
+         does rather than being desaturated by hand twice.
+       - NOTHING HERE COLLIDES. It is drawn and nothing else — no entry in
+         `arena.walls`, `props` or `hazards`, nothing the simulation can see.
+
+     TWO KINDS OF SURROUND, and the difference is the whole point:
+
+       town-rug, sandbox   the play surface is an OBJECT resting on the floor,
+                           so the surround is a DIFFERENT material and the
+                           break is meant to be seen: boards under the rug,
+                           grass under the sandpit.
+       stunt, kitchen      the arena's own ground plane already IS the room
+                           floor — `groundColour` on those tracks is commented
+                           "the bedroom floor" and "the kitchen floor, four
+                           hundred units down". So the surround is derived from
+                           that colour and simply CONTINUES, and the seam at
+                           the bounds must not be visible at all.
+
+     THE LIGHT AGREES WITH EVERYTHING ELSE. Faces are shaded through
+     `Pj.faceLight` from the world angle of their outward normal, and the play
+     surface throws a shadow onto the floor below it through `Pj.lightOffset` —
+     the rug's own thickness on the boards, the sandpit's frame on the grass,
+     the track's raised deck onto the bedroom floor, and the table onto the
+     kitchen tiles. That last one is worth more than the furniture.          */
+
+  /* How far past `arena.bounds` the walls stand, and it is a MEASURED number
+     rather than a taste one. groundTilt 0.30 buys a very short horizon: the top
+     of the viewport is `h * horizonBias / zoom / groundTilt` world units ahead
+     of the camera, which on the 595-tall canvas the shot harness renders is
+     1,069 — barely nine car lengths. `arena.bounds` is already the outer road
+     edge plus 400, so a wall at 900 past THAT is 1,300 ahead of a car on the
+     outside of the circuit and is never on screen at all. The first version
+     used 900 and rendered an empty band of floor every time.
+
+     420 puts the skirting 820 units past the outer kerb: seven car lengths, far
+     enough that nothing can be mistaken for road and nothing can be reached,
+     close enough to be inside the horizon from the outer half of any track. A
+     full-window canvas sees nearly twice as far and simply gets more room. */
+  ROOM_OUT: 420,
+
+  ROOMS: {
+    'town-rug': {
+      floor: '#7a5734',                  // varnished pine, warm and dark
+      tile: 'boards',
+      sill: 18,                          // the rug's own thickness
+      wall: '#a8a08e', skirt: '#d8d1bf', skirtH: 96, wallH: 820,
+    },
+    'stunt': {
+      floor: null,                       // continue arena.groundColour
+      tile: 'boards',
+      sill: 0,
+      wall: '#575064', skirt: '#6d667a', skirtH: 96, wallH: 820,
+    },
+    'kitchen': {
+      floor: null,                       // continue arena.groundColour
+      tile: 'flags',
+      sill: 0,
+      wall: '#9aa0a4', skirt: '#c4c8c8', skirtH: 96, wallH: 820,
+    },
+    'sandbox': {
+      /* Outdoors — 08_World_Sandbox.md opens on "a backyard sandbox". So no
+         skirting and no plaster: grass, and a fence at the end of it. */
+      floor: '#5f7042',
+      tile: 'grass',
+      sill: 84,                          // the pit stands proud of the lawn
+      pit: true,                         // ...and has sides holding it up
+      wall: '#6b5a3f', skirt: '#7d6a4a', skirtH: 40, wallH: 210,
+    },
+  },
+
+  /* Small props standing in the surround, placed against the BOUNDS rather
+     than in world coordinates, so one list serves every track in a world and a
+     new track inherits its room for nothing.
+
+       side   0 = -x, 1 = +x, 2 = -y, 3 = +y
+       along  0..1 down that edge
+       out    0..1 across the band, 0 at the bounds and 1 at the wall
+       w      along the wall,  d  out from it,  h  up
+
+     Deliberately few. The brief for this world is "the odd furniture leg, a
+     scattered toy", and a dozen objects out here would be a second scene
+     rather than a hint of one.
+
+     Every depth obeys `out * ROOM_OUT + d / 2 <= ROOM_OUT`, or the back of the
+     thing goes through the wall. And every height is kept well under 420,
+     because heightScale draws a 400-tall object 340 pixels up a 595-pixel
+     view — furniture out here occupies a startling amount of screen and the
+     first pass at these numbers put a chest of drawers across the top third
+     of the frame. */
+  ROOM_PROPS: {
+    'town-rug': [
+      { kind: 'box', side: 3, along: 0.30, out: 0.52, w: 1900, d: 360, h: 330,
+        colour: '#7d5c3e' },                        // a chest of drawers
+      { kind: 'leg', side: 1, along: 0.24, out: 0.42, r: 54, h: 260,
+        colour: '#6b4e35' },                        // the foot of the bed
+      { kind: 'leg', side: 1, along: 0.53, out: 0.42, r: 54, h: 260,
+        colour: '#6b4e35' },
+      { kind: 'box', side: 0, along: 0.61, out: 0.30, w: 118, d: 118, h: 118,
+        colour: '#3f6cb4' },                        // a block, off the rug
+      { kind: 'leg', side: 2, along: 0.44, out: 0.42, r: 82, h: 150,
+        colour: '#b0503c' },                        // the tin the crayons live in
+    ],
+    'stunt': [
+      { kind: 'box', side: 3, along: 0.44, out: 0.50, w: 2300, d: 380, h: 400,
+        colour: '#5d4d58' },                        // the dresser, named on the box
+      { kind: 'box', side: 0, along: 0.36, out: 0.40, w: 720, d: 400, h: 230,
+        colour: '#4c4351' },                        // the toy box
+      { kind: 'leg', side: 1, along: 0.58, out: 0.40, r: 58, h: 300,
+        colour: '#493e47' },
+    ],
+    'kitchen': [
+      { kind: 'box', side: 3, along: 0.50, out: 0.54, w: 2600, d: 340, h: 360,
+        colour: '#8e8070' },                        // the run of units
+      { kind: 'leg', side: 0, along: 0.34, out: 0.40, r: 40, h: 240,
+        colour: '#7b5d3f' },                        // a chair, pushed in
+      { kind: 'leg', side: 0, along: 0.46, out: 0.40, r: 40, h: 240,
+        colour: '#7b5d3f' },
+      { kind: 'leg', side: 2, along: 0.63, out: 0.38, r: 40, h: 240,
+        colour: '#7b5d3f' },
+    ],
+    'sandbox': [
+      { kind: 'leg', side: 2, along: 0.33, out: 0.44, r: 108, h: 210,
+        colour: '#9a5f40' },                        // a terracotta pot
+      { kind: 'box', side: 1, along: 0.56, out: 0.34, w: 130, d: 420, h: 40,
+        colour: '#8b7450' },                        // a plank, put down and left
+    ],
+  },
+
+  /* ── the floor, and the shadow the play surface drops on it ───────────────
+     Drawn BEFORE drawGround, because the play surface is meant to cover the
+     inner part of both: the shadow is a full offset copy of the surface's
+     footprint and what survives is the crescent that sticks out on the side
+     the light is going. Getting that for one quad is the whole reason it is
+     drawn underneath rather than clipped. */
+  drawRoomFloor(ctx, arena) {
+    const R = this.ROOMS[arena.world];
+    if (!R) return;
+    const Pj = BR.Projection;
+    const b = arena.bounds;
+    const OUT = this.ROOM_OUT;
+    const z = -R.sill;
+
+    /* A RING, not a rectangle. The room floor under the arena is never seen —
+       the play surface covers it — and filling it anyway costs two full-screen
+       fills a frame at the widest part of the view, paid again per viewport.
+       The hole is pulled INSIDE the bounds by sill * 2.83, which is exactly
+       how far a plane `sill` below the surface slides down the screen relative
+       to it (heightScale / groundTilt, the exchange rate in Projection.js), so
+       the sandpit's lawn cannot open a gap along the near edge. */
+    const IN = R.sill * (Pj.heightScale / Pj.groundTilt) + 120;
+    const o = [
+      Pj.project(b.minX - OUT, b.minY - OUT, z),
+      Pj.project(b.maxX + OUT, b.minY - OUT, z),
+      Pj.project(b.maxX + OUT, b.maxY + OUT, z),
+      Pj.project(b.minX - OUT, b.maxY + OUT, z),
+    ];
+    const i = [
+      Pj.project(b.minX + IN, b.minY + IN, z),
+      Pj.project(b.maxX - IN, b.minY + IN, z),
+      Pj.project(b.maxX - IN, b.maxY - IN, z),
+      Pj.project(b.minX + IN, b.maxY - IN, z),
+    ];
+    ctx.beginPath();
+    ctx.moveTo(o[0].sx, o[0].sy);
+    for (let k = 1; k < 4; k++) ctx.lineTo(o[k].sx, o[k].sy);
+    ctx.closePath();
+    ctx.moveTo(i[0].sx, i[0].sy);                   // wound the other way, so
+    for (let k = 3; k > 0; k--) ctx.lineTo(i[k].sx, i[k].sy);   // it is a hole
+    ctx.closePath();
+
+    ctx.fillStyle = R.floor || this.shade(arena.groundColour, 0.05);
+    ctx.fill();
+    const pat = this.roomPattern(ctx, this.roomTile(arena, R), z);
+    if (pat) { ctx.fillStyle = pat; ctx.fill(); }
+
+    /* CONTACT SHADOW. A rug is 18 units thick and a sandpit frame stands 110
+       above the lawn, so neither throws much — 14 and 87 units. Two copies at
+       different offsets rather than one, because the near half of a shadow
+       this shallow is nearly opaque and the far half is nearly gone, and a
+       single flat alpha reads as a painted border instead. */
+    if (R.sill > 0) {
+      // The pit throws from the TOP of its frame and from the frame's outer
+      // face, not from the sand — 96 out and 30 higher than the sand it holds.
+      const G = R.pit ? 96 : 0;
+      const H = R.sill + (R.pit ? 30 : 0);
+      const steps = [[2.1, 0.10], [1.0, 0.17]];
+      for (let s = 0; s < steps.length; s++) {
+        const off = Pj.lightOffset(H * steps[s][0]);
+        ctx.beginPath();
+        const q = [[b.minX - G, b.minY - G], [b.maxX + G, b.minY - G],
+                   [b.maxX + G, b.maxY + G], [b.minX - G, b.maxY + G]];
+        for (let k = 0; k < 4; k++) {
+          const p = Pj.project(q[k][0] + off.dx, q[k][1] + off.dy, z);
+          if (k === 0) ctx.moveTo(p.sx, p.sy); else ctx.lineTo(p.sx, p.sy);
+        }
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(24,18,14,' + steps[s][1] + ')';
+        ctx.fill();
+      }
+    }
+  },
+
+  /* ── everything in the room that stands up ────────────────────────────────
+     Drawn AFTER drawGround and BEFORE drawRoad, and both halves of that matter.
+
+     After the ground, because anything with height reaches up the screen over
+     ground that is behind it, and drawGround fills the whole bounds quad in
+     one go regardless of depth — a wall drawn first would be erased by the
+     floor it stands behind.
+
+     Before the road, because the road is nearer than all of it. The painter's
+     order comes out right on its own here: the room is convex and everything
+     it draws is outside the bounds, so the only ground it can ever paint over
+     is ground further away than itself. */
+  drawRoom(ctx, arena) {
+    const R = this.ROOMS[arena.world];
+    if (!R) return;
+    this.drawDeckShadow(ctx, arena);
+    this.drawRoomWalls(ctx, arena, R);
+    this.drawRoomProps(ctx, arena, R);
+  },
+
+  /**
+   * The shadow the raised deck drops on the floor a long way below it.
+   *
+   * This is the cheapest height cue in the game and the one the elevated
+   * worlds were missing. Dresser Drop puts you 300 units up and Shelf Run 440,
+   * and the only thing that ever said so was a pillar every sixth segment.
+   *
+   * ONE PATH, ONE FILL, however many pieces go into it. Overlapping fills at
+   * the same alpha double-darken where they meet and every join reads as a
+   * crease — the same trap `hull2d` exists to avoid on props. Collected as
+   * subpaths of a single path and filled once, the alpha is applied to the
+   * union instead.
+   *
+   * The kitchen is the exception and it is a deliberate one: a table is a
+   * SOLID, so its shadow is the whole outer ring filled in, not a ribbon.
+   * Drawing the ribbon there would put a doughnut of daylight on the kitchen
+   * floor under the middle of the table.
+   */
+  drawDeckShadow(ctx, arena) {
+    if (!arena.elevated) return;
+    const Pj = BR.Projection;
+    const o = arena.outer, ip = arena.inner;
+    if (!o || !o.length) return;
+    const n = o.length;
+    const FLOOR = 40;                 // Recovery's FLOOR_Z: below it is not a drop
+    let drew = false;
+
+    ctx.beginPath();
+    if (arena.world === 'kitchen') {
+      const off = Pj.lightOffset(o[0][2] || 0);
+      for (let k = 0; k < n; k += 2) {
+        const p = Pj.project(o[k][0] + off.dx, o[k][1] + off.dy, 0);
+        if (!drew) { ctx.moveTo(p.sx, p.sy); drew = true; }
+        else ctx.lineTo(p.sx, p.sy);
+      }
+      ctx.closePath();
+    } else {
+      /* Every SECOND segment, spanning two. A shadow 240 units from the thing
+         casting it does not need the deck's own 80-unit resolution, and this
+         is the widest part of the view — the same argument the road makes for
+         culling, one step further. */
+      for (let k = 0; k < n; k += 2) {
+        const j = (k + 2) % n;
+        const zk = o[k][2] || 0;
+        if (zk <= FLOOR) continue;
+        const a = Pj.lightOffset(zk), c = Pj.lightOffset(o[j][2] || 0);
+        if (!this.onScreen(o[k][0] + a.dx, o[k][1] + a.dy, 0) &&
+            !this.onScreen(ip[k][0] + a.dx, ip[k][1] + a.dy, 0)) continue;
+        const q = [
+          Pj.project(o[k][0]  + a.dx, o[k][1]  + a.dy, 0),
+          Pj.project(o[j][0]  + c.dx, o[j][1]  + c.dy, 0),
+          Pj.project(ip[j][0] + c.dx, ip[j][1] + c.dy, 0),
+          Pj.project(ip[k][0] + a.dx, ip[k][1] + a.dy, 0),
+        ];
+        ctx.moveTo(q[0].sx, q[0].sy);
+        for (let m = 1; m < 4; m++) ctx.lineTo(q[m].sx, q[m].sy);
+        ctx.closePath();
+        drew = true;
+      }
+    }
+    if (!drew) return;
+    ctx.fillStyle = 'rgba(16,12,18,0.30)';
+    ctx.fill();
+  },
+
+  /**
+   * A straight run of upright board: a skirting, a stretch of wall, the side
+   * of a sandpit.
+   *
+   * BACKFACE CULLED, and not as an optimisation. The camera is INSIDE the room,
+   * so at most two of the four walls are ever turned toward it; drawing the
+   * other two paints the near ones across the floor in front of the car,
+   * because their quads run up the screen exactly like the far ones do.
+   *
+   * `nrm` is the WORLD angle of the face's outward normal — the direction it
+   * looks. `Projection.project` builds camera-space y as x*_sin + y*_cos and
+   * documents larger as nearer, so a face is turned toward the viewer exactly
+   * when its normal has a positive one. That same angle goes to `faceLight`,
+   * so the wall you are driving toward is lit by the room's own light rather
+   * than by a constant chosen from one camera angle.
+   */
+  roomBoard(ctx, ax, ay, bx, by, z0, z1, nrm, colour, amt) {
+    const Pj = BR.Projection;
+    if (Math.cos(nrm) * Pj._sin + Math.sin(nrm) * Pj._cos <= 0) return;
+
+    // Sampled along its length, not by its corners: these runs are thousands
+    // of units long and a corner test drops a wall whose middle is in shot.
+    let on = false;
+    for (let s = 0; s <= 10 && !on; s++) {
+      const t = s / 10;
+      const x = ax + (bx - ax) * t, y = ay + (by - ay) * t;
+      on = this.onScreen(x, y, z0) || this.onScreen(x, y, z1);
+    }
+    if (!on) return;
+
+    const p = [Pj.project(ax, ay, z0), Pj.project(bx, by, z0),
+               Pj.project(bx, by, z1), Pj.project(ax, ay, z1)];
+    ctx.beginPath();
+    ctx.moveTo(p[0].sx, p[0].sy);
+    for (let k = 1; k < 4; k++) ctx.lineTo(p[k].sx, p[k].sy);
+    ctx.closePath();
+    ctx.fillStyle = this.shade(colour, (amt === undefined ? -0.10 : amt) +
+                                       Pj.faceLight(nrm) * 0.14);
+    ctx.fill();
+  },
+
+  /* The four sides of the room, plus — in the sandbox — the four sides of the
+     pit. The pit is the part that makes the sand read as being CONTAINED: a
+     timber frame standing 30 units proud of the sand, with the lawn 84 below
+     it, so the sand is visibly held up rather than painted on. */
+  drawRoomWalls(ctx, arena, R) {
+    const b = arena.bounds;
+    const OUT = this.ROOM_OUT;
+    const HALF = Math.PI / 2;
+    const z = -R.sill;
+
+    // side: 0 = -x, 1 = +x, 2 = -y, 3 = +y. `nrm` looks INTO the room.
+    const runs = [
+      { x0: b.minX - OUT, y0: b.minY - OUT, x1: b.minX - OUT, y1: b.maxY + OUT, n: 0 },
+      { x0: b.maxX + OUT, y0: b.maxY + OUT, x1: b.maxX + OUT, y1: b.minY - OUT, n: Math.PI },
+      { x0: b.maxX + OUT, y0: b.minY - OUT, x1: b.minX - OUT, y1: b.minY - OUT, n: HALF },
+      { x0: b.minX - OUT, y0: b.maxY + OUT, x1: b.maxX + OUT, y1: b.maxY + OUT, n: -HALF },
+    ];
+    for (let k = 0; k < runs.length; k++) {
+      const r = runs[k];
+      this.roomBoard(ctx, r.x0, r.y0, r.x1, r.y1,
+                     z + R.skirtH, z + R.wallH, r.n, R.wall, -0.06);
+      this.roomBoard(ctx, r.x0, r.y0, r.x1, r.y1,
+                     z, z + R.skirtH, r.n, R.skirt, -0.14);
+    }
+
+    if (!R.pit) return;
+
+    /* THE PIT FRAME. Corners overlap by the frame's own width so the four runs
+       meet as a mitre rather than leaving a notch of lawn at each corner. */
+    const W = 96, TOP = 30;
+    const sides = [
+      { x0: b.minX, y0: b.minY - W, x1: b.minX, y1: b.maxY + W, n: 0,  ox: -W, oy: 0 },
+      { x0: b.maxX, y0: b.maxY + W, x1: b.maxX, y1: b.minY - W, n: Math.PI, ox: W, oy: 0 },
+      { x0: b.maxX + W, y0: b.minY, x1: b.minX - W, y1: b.minY, n: HALF, ox: 0, oy: -W },
+      { x0: b.minX - W, y0: b.maxY, x1: b.maxX + W, y1: b.maxY, n: -HALF, ox: 0, oy: W },
+    ];
+    const Pj = BR.Projection;
+    for (let k = 0; k < sides.length; k++) {
+      const s = sides[k];
+      // The inside of the board, from the sand it holds up to its top edge.
+      this.roomBoard(ctx, s.x0, s.y0, s.x1, s.y1, 0, TOP, s.n, R.wall, -0.20);
+      // The outside, dropping to the lawn — only ever seen from behind.
+      this.roomBoard(ctx, s.x0 + s.ox, s.y0 + s.oy, s.x1 + s.ox, s.y1 + s.oy,
+                     -R.sill, TOP, s.n + Math.PI, R.wall, -0.12);
+      // The top edge, which is the piece that reads as a plank on its side.
+      if (!this.onScreen((s.x0 + s.x1) / 2, (s.y0 + s.y1) / 2, TOP)) continue;
+      const q = [Pj.project(s.x0, s.y0, TOP), Pj.project(s.x1, s.y1, TOP),
+                 Pj.project(s.x1 + s.ox, s.y1 + s.oy, TOP),
+                 Pj.project(s.x0 + s.ox, s.y0 + s.oy, TOP)];
+      ctx.beginPath();
+      ctx.moveTo(q[0].sx, q[0].sy);
+      for (let m = 1; m < 4; m++) ctx.lineTo(q[m].sx, q[m].sy);
+      ctx.closePath();
+      ctx.fillStyle = this.shade(R.skirt, 0.04);
+      ctx.fill();
+    }
+  },
+
+  /* Furniture and dropped toys, placed against the bounds. Each one is an
+     axis-aligned box or an upright cylinder with a cast shadow — the same
+     sweep `drawProp` uses, for the same reason: a shadow parked under a thing
+     says nothing about how tall it is. */
+  drawRoomProps(ctx, arena, R) {
+    const list = this.ROOM_PROPS[arena.world];
+    if (!list) return;
+    const b = arena.bounds;
+    const OUT = this.ROOM_OUT;
+    const z = -R.sill;
+
+    for (let i = 0; i < list.length; i++) {
+      const d = list[i];
+      let cx, cy, hx, hy;
+      if (d.side < 2) {
+        cx = d.side === 0 ? b.minX - d.out * OUT : b.maxX + d.out * OUT;
+        cy = b.minY + d.along * (b.maxY - b.minY);
+        hx = (d.d || 0) / 2; hy = (d.w || 0) / 2;      // long axis runs in y
+      } else {
+        cy = d.side === 2 ? b.minY - d.out * OUT : b.maxY + d.out * OUT;
+        cx = b.minX + d.along * (b.maxX - b.minX);
+        hx = (d.w || 0) / 2; hy = (d.d || 0) / 2;
+      }
+      if (d.kind === 'leg') { hx = d.r; hy = d.r; }
+      /* Both ends and the top, not just the centre. A run of kitchen units is
+         2,600 units long and the centre point is off screen for most of the
+         stretch where one end of it is in plain view — the same mistake the
+         wall cull made before it started sampling. */
+      if (!this.onScreen(cx, cy, z) && !this.onScreen(cx, cy, z + d.h) &&
+          !this.onScreen(cx - hx, cy - hy, z + d.h) &&
+          !this.onScreen(cx + hx, cy + hy, z + d.h)) continue;
+      this.roomSolid(ctx, cx, cy, hx, hy, z, z + d.h, d.colour, d.kind === 'leg');
+    }
+  },
+
+  /**
+   * One box or upright cylinder standing on the room floor.
+   *
+   * Two visible faces at most and usually two, because an axis-aligned box has
+   * exactly two faces turned toward any camera. Same backface test as
+   * `roomBoard`, same light.
+   */
+  roomSolid(ctx, cx, cy, hx, hy, z0, z1, colour, round) {
+    const Pj = BR.Projection;
+    const HALF = Math.PI / 2;
+
+    // Shadow first: the sweep of the footprint from where it stands to where
+    // the light throws it, hulled so the two ends do not double-darken.
+    const off = Pj.lightOffset(z1 - z0);
+    const base = [];
+    const N = round ? 10 : 4;
+    for (let i = 0; i < N; i++) {
+      const a = round ? (i / N) * Math.PI * 2 : Math.PI / 4 + (i / 4) * Math.PI * 2;
+      const bx = cx + Math.cos(a) * hx * (round ? 1 : Math.SQRT2);
+      const by = cy + Math.sin(a) * hy * (round ? 1 : Math.SQRT2);
+      base.push([bx, by]);
+      base.push([bx + off.dx, by + off.dy]);
+    }
+    const hull = this.hull2d(base);
+    ctx.beginPath();
+    for (let i = 0; i < hull.length; i++) {
+      const p = Pj.project(hull[i][0], hull[i][1], z0);
+      if (i === 0) ctx.moveTo(p.sx, p.sy); else ctx.lineTo(p.sx, p.sy);
+    }
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(20,14,12,0.26)';
+    ctx.fill();
+
+    const quad = function (ax, ay, bx, by, fill) {
+      const p = [Pj.project(ax, ay, z0), Pj.project(bx, by, z0),
+                 Pj.project(bx, by, z1), Pj.project(ax, ay, z1)];
+      ctx.beginPath();
+      ctx.moveTo(p[0].sx, p[0].sy);
+      for (let k = 1; k < 4; k++) ctx.lineTo(p[k].sx, p[k].sy);
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+    };
+
+    const faces = [
+      [0,        cx + hx, cy - hy, cx + hx, cy + hy],
+      [Math.PI,  cx - hx, cy + hy, cx - hx, cy - hy],
+      [HALF,     cx + hx, cy + hy, cx - hx, cy + hy],
+      [-HALF,    cx - hx, cy - hy, cx + hx, cy - hy],
+    ];
+    for (let i = 0; i < 4; i++) {
+      const f = faces[i];
+      if (Math.cos(f[0]) * Pj._sin + Math.sin(f[0]) * Pj._cos <= 0) continue;
+      quad(f[1], f[2], f[3], f[4],
+           this.shade(colour, -0.24 + Pj.faceLight(f[0]) * 0.20));
+    }
+
+    // The lid, in the light. Round things get an ellipse instead of a square,
+    // which is the whole of the difference between a bed leg and a shoebox at
+    // groundTilt 0.30 — the top face is most of what a player sees.
+    ctx.beginPath();
+    if (round) {
+      const c = Pj.project(cx, cy, z1);
+      ctx.ellipse(c.sx, c.sy, hx, hy * Pj.groundTilt, 0, 0, Math.PI * 2);
+    } else {
+      const c = [Pj.project(cx - hx, cy - hy, z1), Pj.project(cx + hx, cy - hy, z1),
+                 Pj.project(cx + hx, cy + hy, z1), Pj.project(cx - hx, cy + hy, z1)];
+      ctx.moveTo(c[0].sx, c[0].sy);
+      for (let k = 1; k < 4; k++) ctx.lineTo(c[k].sx, c[k].sy);
+      ctx.closePath();
+    }
+    ctx.fillStyle = this.shade(colour, 0.08);
+    ctx.fill();
+  },
+
+  /**
+   * groundPattern, for a plane that is not the play surface's.
+   *
+   * The same matrix, with the plane's own height folded into the translation.
+   * The play surface's textures keep going through `groundPattern` untouched;
+   * this exists because the floor under a sandpit is 84 units BELOW the sand,
+   * and a pattern built for z = 0 slides 71 pixels out of register with the
+   * quad it is filling (heightScale, the same exchange rate as everywhere).
+   */
+  roomPattern(ctx, tile, z) {
+    if (!tile) return null;
+    const pat = ctx.createPattern(tile, 'repeat');
+    if (!pat || !pat.setTransform) return null;
+    const Pj = BR.Projection;
+    const cs = Pj._cos, sn = Pj._sin, t = Pj.groundTilt;
+    const ox = -Pj.camX, oy = -Pj.camY;
+    pat.setTransform(new DOMMatrix([
+      cs, t * sn,
+      -sn, t * cs,
+      cs * ox - sn * oy,
+      t * (sn * ox + cs * oy) + ((Pj.camZ || 0) - z) * Pj.heightScale,
+    ]));
+    return pat;
+  },
+
+  /**
+   * The material the room floor is made of. Built once and cached, like every
+   * other tile here.
+   *
+   * TRANSLUCENT MARKS ONLY, no opaque colour except in the grass. The base is
+   * a flat fill underneath — sometimes authored, sometimes derived from the
+   * track's own `groundColour` so the seam at the bounds cannot be seen — and
+   * a tile that painted its own base would put a visible rectangle around
+   * every arena on the two worlds where the floor is meant to continue.
+   *
+   * Tiles are 512, four times the weave's 128. A floorboard is a big object
+   * and the room is at the top of the frame where the period would be most
+   * obvious, so the boards are wide and the joints are staggered across two
+   * rows — a butt joint repeating every 512 would rule a ladder across the
+   * whole floor, which is the failure the rug print already had to solve.
+   */
+  roomTile(arena, R) {
+    const key = 'room:' + R.tile;
+    this._tiles = this._tiles || {};
+    if (this._tiles[key] !== undefined) return this._tiles[key];
+
+    const S = 512;
+    const cv = document.createElement('canvas');
+    cv.width = S; cv.height = S;
+    const g = cv.getContext('2d');
+
+    // Seeded, as every tile in this file is: a floor that differed between two
+    // renders would break every pixel check, and Math.random is the AI's.
+    let seed = 20918;
+    const rnd = function () {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return seed / 0x7fffffff;
+    };
+
+    if (R.tile === 'boards') {
+      const BW = 128;                                   // board width
+      for (let r = 0; r < S / BW; r++) {
+        const y = r * BW;
+        // The joint between boards: a dark gap with the lit arris just below
+        // it, which is what actually reads as "these are separate planks".
+        g.fillStyle = 'rgba(0,0,0,0.30)';
+        g.fillRect(0, y, S, 3);
+        g.fillStyle = 'rgba(255,238,206,0.055)';
+        g.fillRect(0, y + 3, S, 2);
+        // Butt joints, offset per row so they never line up into a ladder.
+        const at = ((r * 197) % S);
+        g.fillStyle = 'rgba(0,0,0,0.22)';
+        g.fillRect(at, y + 4, 2.5, BW - 5);
+        // Grain: long shallow streaks along the board, never across it.
+        for (let i = 0; i < 7; i++) {
+          const gy = y + 10 + rnd() * (BW - 20);
+          const x0 = rnd() * S, len = 90 + rnd() * 200;
+          g.strokeStyle = rnd() > 0.45 ? 'rgba(46,30,16,0.10)'
+                                       : 'rgba(255,230,190,0.045)';
+          g.lineWidth = 1 + rnd() * 2.4;
+          g.beginPath();
+          g.moveTo(x0, gy);
+          g.quadraticCurveTo(x0 + len / 2, gy + (rnd() - 0.5) * 5, x0 + len, gy);
+          g.stroke();
+        }
+      }
+
+    } else if (R.tile === 'flags') {
+      // Kitchen floor tiles: one 256 flag in each quarter, with grout between
+      // and each flag a slightly different value so the grid is a floor rather
+      // than graph paper.
+      const F = 256;
+      for (let r = 0; r < 2; r++) {
+        for (let c = 0; c < 2; c++) {
+          const v = (rnd() - 0.5) * 0.05;
+          g.fillStyle = v > 0 ? 'rgba(255,255,255,' + v.toFixed(3) + ')'
+                              : 'rgba(0,0,0,' + (-v).toFixed(3) + ')';
+          g.fillRect(c * F, r * F, F, F);
+        }
+      }
+      g.fillStyle = 'rgba(0,0,0,0.16)';
+      g.fillRect(0, 0, S, 5); g.fillRect(0, F, S, 5);
+      g.fillRect(0, 0, 5, S); g.fillRect(F, 0, 5, S);
+
+    } else {
+      /* Grass. Mottle and tufts, and NOT ONE STRAIGHT LINE — a lawn has no
+         period at all, so anything ruled here would be the only thing in the
+         room the eye could lock onto. */
+      for (let i = 0; i < 26; i++) {
+        g.fillStyle = rnd() > 0.5 ? 'rgba(126,150,84,0.16)'
+                                  : 'rgba(38,58,30,0.16)';
+        g.beginPath();
+        g.ellipse(rnd() * S, rnd() * S, 40 + rnd() * 70, 26 + rnd() * 50,
+                  rnd() * Math.PI, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.lineCap = 'round';
+      for (let i = 0; i < 150; i++) {
+        const x = rnd() * S, y = rnd() * S, a = -1.2 - rnd() * 0.9, L = 7 + rnd() * 9;
+        g.strokeStyle = rnd() > 0.4 ? 'rgba(30,50,26,0.30)'
+                                    : 'rgba(150,176,104,0.24)';
+        g.lineWidth = 1.6;
+        g.beginPath();
+        g.moveTo(x, y);
+        g.lineTo(x + Math.cos(a) * L, y + Math.sin(a) * L);
+        g.stroke();
+      }
+    }
+
+    this._tiles[key] = cv;
+    return cv;
+  },
 
   /* Chequered finish line, painted on the ground plane. */
   drawFinishLine(ctx, arena) {
@@ -11757,6 +12415,65 @@ BR.Renderer = {
     };
 
     const S = this.shapeFor(spec);
+    const MAT = S.mat;
+
+    const quad = function (pts, fill, stroke) {
+      ctx.beginPath();
+      ctx.moveTo(pts[0].sx, pts[0].sy);
+      for (let k = 1; k < pts.length; k++) ctx.lineTo(pts[k].sx, pts[k].sy);
+      ctx.closePath();
+      if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+      if (stroke) { ctx.strokeStyle = stroke; ctx.stroke(); }
+    };
+
+    /* ── WHERE THE LIGHT IS, IN THE CAR'S OWN FRAME ────────────────────────
+       `light.dir` is the direction the light TRAVELS, so the direction back
+       toward the source is dir + PI. Resolved into the car's local axes it
+       gives one number, `litY`: which flank the sheen belongs on, +1 for the
+       car's left, -1 for its right.
+
+       This is the whole reason the light was worth having. The camera keeps
+       the direction of travel pointing up the screen, so a car's silhouette
+       never rotates — the ONLY thing that changes as it goes round a corner
+       is where the highlight sits. A gloss streak painted on a fixed side, as
+       this had, is a decal. One that walks across the roof through a corner is
+       a curved plastic surface. */
+    const litY = Math.sin(Pj.light.dir + Math.PI - heading);
+    const lineW = Math.max(0.6, 1.6 * shrinkK / this.zoom);
+    const sheen = MAT.spec * (0.45 + 0.55 * Math.abs(litY));
+    const sheenCol = sheen > 0.02
+      ? 'rgba(255,255,255,' + sheen.toFixed(3) + ')' : null;
+
+    /* ── THE MOULD LINE ────────────────────────────────────────────────────
+       The thing that says "this was made in a factory, in two halves", and the
+       detail this pass was asked for first. It runs down the centre of the
+       shell, over the nose, the bonnet and the roof.
+
+       TWO hairlines a hair apart, never one. A single dark line is a scratch;
+       a dark line with a pale one beside it is a raised ridge, and which side
+       gets which is decided by the light — so the ridge catches on one side
+       going up the straight and on the other coming back.
+
+       Drawn per PANEL, because the shell and the roof are at different heights
+       and this camera lifts the roof three units up the screen. Ruled in one
+       pass at the end it painted the bonnet's own seam across the cabin above
+       it and left the whole visible field behind the cabin bare — one line in
+       the wrong place and a conspicuous gap where it belonged. */
+    const seamPair = function (x0, x1, h) {
+      const sw = Math.max(W * 0.06, lineW * 0.62);
+      const off = litY >= 0 ? sw : -sw;
+      ctx.lineWidth = lineW * 0.8;
+      ctx.globalAlpha = (v.isGhost ? 0.38 : 1) * MAT.seam;
+      for (let k = 0; k < 2; k++) {
+        const a = lp(x0, (k ? off : -off), h), b = lp(x1, (k ? off : -off), h);
+        ctx.beginPath();
+        ctx.moveTo(a.sx, a.sy);
+        ctx.lineTo(b.sx, b.sy);
+        ctx.strokeStyle = k ? S.seamLit : S.seamDark;
+        ctx.stroke();
+      }
+      ctx.globalAlpha = v.isGhost ? 0.38 : 1;
+    };
 
     /* ── WHEELS ────────────────────────────────────────────────────────────
        The single strongest "this is a toy car and not a box" cue there is, and
@@ -11780,13 +12497,13 @@ BR.Renderer = {
          ground, poking out past the body, which is what a wheel looks like from
          above and is the strongest silhouette cue the car has. */
       const wy0 = side * (W * 0.74), wy1 = side * (W + S.track);
-      const quad = [
+      const wq = [
         lp(fx - wr, wy0, S.ride * 0.5), lp(fx + wr, wy0, S.ride * 0.5),
         lp(fx + wr * 0.9, wy1, S.ride * 0.5), lp(fx - wr * 0.9, wy1, S.ride * 0.5),
       ];
       ctx.beginPath();
-      ctx.moveTo(quad[0].sx, quad[0].sy);
-      for (let k = 1; k < 4; k++) ctx.lineTo(quad[k].sx, quad[k].sy);
+      ctx.moveTo(wq[0].sx, wq[0].sy);
+      for (let k = 1; k < 4; k++) ctx.lineTo(wq[k].sx, wq[k].sy);
       ctx.closePath();
       ctx.fill();
     }
@@ -11810,15 +12527,55 @@ BR.Renderer = {
     }
     edges.sort(function (a, b) { return a.key - b.key; });
 
-    ctx.fillStyle = spec.colorBody;
+    /* EVERY FLANK LIT SEPARATELY. They were all one flat `colorBody`, which is
+       what made a car read as a coloured region with an outline round it rather
+       than as a solid object: eight faces pointing eight ways, all exactly the
+       same value. Each footprint edge carries the outward normal it has in the
+       car's own frame (cached on the shape — the footprint never changes), so
+       the world angle is that plus the heading and faceLight() does the rest.
+
+       The amplitude is per MATERIAL and deliberately small. Die-cast swings
+       widest because painted metal does; wood barely moves because a matte
+       surface is nearly Lambertian and does not glint. Pushed further it looks
+       better on one car standing still and starts eating the body colour, which
+       is the one thing on a vehicle that is load-bearing — hue is how a player
+       knows who just took the inside line, on screen and on the minimap. */
+    /* ── AND HALF OF THEM ARE NEVER SEEN ───────────────────────────────────
+       Traced, because lighting the faces individually made it worth knowing
+       what they cost: a car emitted eight side quads a frame and at least four
+       of them were painted and then covered.
+
+       A side face is an extrusion DOWNWARD from its own footprint edge — the
+       quad runs from the top face's edge down to the ride height — so on the
+       far side of the car it hangs into the middle of the top polygon, which
+       is drawn immediately afterwards and covers it completely. Only the near
+       edges hang out past the silhouette where they can be seen. Confirmed in
+       the trace: Red Racer's nose quad occupies screen rows -10.8 to -6.5 and
+       the bonnet drawn over it covers -10.8 to -2.4.
+
+       The projection is a rotation and a positive squash, so it preserves
+       orientation: a footprint wound counter-clockwise stays counter-clockwise
+       on screen, and for such a polygon the outward screen normal of an edge
+       is (dsy, -dsx). Nearer is further DOWN the screen, so a face is visible
+       exactly when dsx < 0. One subtraction per edge.
+
+       ONLY WHEN UPRIGHT. On a loop or a corkscrew the extrusion is not
+       vertical — `up` swings the body out sideways and through the vertical —
+       and a face on the far side is then genuinely visible. Those frames draw
+       all eight, which is what they did before. */
+    const upright = U.z > 0.999;
+    const faces = [];
+    for (let i = 0; i < n; i++) faces[i] = Pj.faceLight(heading + S.normals[i]);
     for (let e = 0; e < edges.length; e++) {
       const i = edges[e].i, j = edges[e].j;
+      if (upright && bot[j].sx >= bot[i].sx) continue;
       ctx.beginPath();
       ctx.moveTo(bot[i].sx, bot[i].sy);
       ctx.lineTo(bot[j].sx, bot[j].sy);
       ctx.lineTo(top[j].sx, top[j].sy);
       ctx.lineTo(top[i].sx, top[i].sy);
       ctx.closePath();
+      ctx.fillStyle = this.tintOf(S.tints, spec.colorBody, faces[i] * MAT.body - 0.04);
       ctx.fill();
     }
 
@@ -11834,8 +12591,119 @@ BR.Renderer = {
     ctx.fillStyle = spec.colorTop;
     ctx.fill();
     ctx.strokeStyle = S.line;
-    ctx.lineWidth = Math.max(0.6, 1.6 * shrinkK / this.zoom);
+    ctx.lineWidth = lineW;
     ctx.stroke();
+
+    /* ── THE SHOULDERS OF THE SHELL ────────────────────────────────────────
+       The single most valuable thing on the car, and it took a render to see
+       why. At this camera the whole nose elevation of a car is hidden behind
+       its own bonnet — measured on Red Racer, the nose face occupies screen
+       rows -10.8 to -6.5 and the top face covers -10.8 to -2.4 — so the flat
+       `colorTop` bonnet is most of what a player ever looks at, and it was one
+       unshaded colour with nothing on it.
+
+       A moulded shell is CROWNED: it curves over, so the flank facing the
+       light is bright and the other is not, and the transition happens at the
+       shoulder rather than at the outline. Two inset bands along the long
+       edges give that for two quads, and they run the full length of the car —
+       which matters, because the length axis is squashed to 30% and anything
+       short comes out as a blob rather than a band. */
+    if (MAT.body > 0.01) {
+      const shz = S.ride + S.bodyH + 0.01;
+      for (let sd = -1; sd <= 1; sd += 2) {
+        const a = sd > 0 ? foot[2] : foot[6], b = sd > 0 ? foot[3] : foot[7];
+        const t = this.tintOf(S.tintsTop, spec.colorTop,
+                              Pj.faceLight(heading + sd * Math.PI / 2) * MAT.body * 0.95);
+        quad([lp(a[0], a[1] * 0.95, shz), lp(b[0], b[1] * 0.95, shz),
+              lp(b[0], b[1] * 0.64, shz), lp(a[0], a[1] * 0.64, shz)], t, null);
+      }
+    }
+
+    /* ── THE CATCH ON THE EDGE ─────────────────────────────────────────────
+       The parting line of the mould runs round the widest point of the shell,
+       and that line is exactly this outline. On a real toy it is the edge that
+       catches the light: a hard bright rim on the side facing the window, and
+       nothing at all on the other side.
+
+       So the same ring is stroked twice — once dark, all the way round, for
+       separation, and once white over only the edges actually facing the light.
+       One extra path per car, and it is the single cheapest thing here that
+       says "shiny". */
+    if (MAT.rim > 0.01) {
+      ctx.beginPath();
+      let open = false;
+      for (let i = 0; i < n; i++) {
+        if (faces[i] > 0.30) {
+          const j = (i + 1) % n;
+          if (!open) ctx.moveTo(top[i].sx, top[i].sy);
+          ctx.lineTo(top[j].sx, top[j].sy);
+          open = true;
+        } else open = false;
+      }
+      ctx.strokeStyle = 'rgba(255,255,255,' + MAT.rim.toFixed(2) + ')';
+      ctx.lineWidth = lineW * 1.15;
+      ctx.stroke();
+    }
+
+    /* ── WEAR ──────────────────────────────────────────────────────────────
+       12_Art_Guide.md: "a brand-new toy car is boring; a loved one has
+       history". Three rubbed patches on the corners of the bonnet and the
+       boot, which is where a toy car that lives in a box actually loses its
+       paint. Seeded off the vehicle id, so a given car always wears the same
+       way and two cars never wear alike — and never off Math.random(), which
+       would both differ between renders and desync the AI by drawing from the
+       shared stream.
+
+       Colour comes from the material, because what is UNDER the paint differs:
+       pale grey metal on the die-cast, lighter raw plastic on the mouldings,
+       bare wood on the Heirloom. Kept off the cabin, which is drawn over it. */
+    const wz = S.ride + S.bodyH + 0.03;
+    ctx.globalAlpha = (v.isGhost ? 0.38 : 1) * MAT.wear;
+    ctx.beginPath();                       // one path, three patches, one fill
+    for (let i = 0; i < S.wear.length; i++) {
+      const m = S.wear[i];
+      const p0 = lp(m[0] - m[2], m[1] - m[3], wz), p1 = lp(m[0] + m[2], m[1] - m[3], wz);
+      const p2 = lp(m[0] + m[2], m[1] + m[3], wz), p3 = lp(m[0] - m[2], m[1] + m[3], wz);
+      ctx.moveTo(p0.sx, p0.sy); ctx.lineTo(p1.sx, p1.sy);
+      ctx.lineTo(p2.sx, p2.sy); ctx.lineTo(p3.sx, p3.sy);
+      ctx.closePath();
+    }
+    ctx.fillStyle = MAT.chip;
+    ctx.fill();
+    ctx.globalAlpha = v.isGhost ? 0.38 : 1;
+
+    /* The sheen on the SHELL, drawn here rather than with the roof's so the
+       cabin lands on top of it and breaks it — a highlight that runs nose to
+       tail, interrupted where the cabin stands, is what a glossy toy looks
+       like from above. Running its full length is also the only way it reads
+       as a streak at all: the first version lit the bonnet alone, and 30%
+       depth squash turned a 7-unit panel into a 2-unit square that came out
+       as a pale blob sitting on the paint. */
+    if (sheenCol) {
+      const bc = litY * W * 0.42, bh = W * 0.13, bz = S.ride + S.bodyH + 0.02;
+      quad([lp(L * 0.90, bc - bh, bz), lp(-L * 0.90, bc - bh, bz),
+            lp(-L * 0.90, bc + bh, bz), lp(L * 0.90, bc + bh, bz)], sheenCol, null);
+    }
+
+    // The parting line down the shell, nose to tail. Same reason as the sheen
+    // for drawing it here: the cabin has to be able to interrupt it.
+    if (MAT.seam > 0.01) seamPair(L * 0.97, -L * 0.97, S.ride + S.bodyH + 0.05);
+
+    /* Wood takes no mould line, so the Heirloom gets the thing it would
+       actually have instead: two long grain marks down the shell. */
+    if (MAT.grain) {
+      ctx.beginPath();
+      [0.34, -0.46].forEach(function (g) {
+        const a = lp(L * 0.92, W * g, S.ride + S.bodyH + 0.05);
+        const b = lp(-L * 0.92, W * g * 0.72, S.ride + S.bodyH + 0.05);
+        ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy);
+      });
+      ctx.strokeStyle = S.seamDark;
+      ctx.lineWidth = lineW * 0.7;
+      ctx.globalAlpha = (v.isGhost ? 0.38 : 1) * 0.45;
+      ctx.stroke();
+      ctx.globalAlpha = v.isGhost ? 0.38 : 1;
+    }
 
     /* ── CABIN ─────────────────────────────────────────────────────────────
        Set back from the nose, narrower than the body. This is what gives the
@@ -11860,6 +12728,9 @@ BR.Renderer = {
     cEdges.sort(function (a, b) { return a.key - b.key; });
     for (let e = 0; e < cEdges.length; e++) {
       const i = cEdges[e].i, j = cEdges[e].j;
+      // Same back-face test as the body, for the same reason: the roof is
+      // drawn straight after and covers whatever hangs inward.
+      if (upright && cbot[j].sx >= cbot[i].sx) continue;
       ctx.beginPath();
       ctx.moveTo(cbot[i].sx, cbot[i].sy);
       ctx.lineTo(cbot[j].sx, cbot[j].sy);
@@ -11868,21 +12739,16 @@ BR.Renderer = {
       ctx.closePath();
       // The forward face is glass. Dark and cool against the body colour, so
       // the car has a front without needing the old nose triangle.
-      ctx.fillStyle = cEdges[e].front ? S.glass : spec.colorBody;
+      ctx.fillStyle = cEdges[e].front ? S.glass
+        : this.tintOf(S.tints, spec.colorBody,
+                      Pj.faceLight(heading + this.CABIN_N[i]) * MAT.body - 0.04);
       ctx.fill();
     }
 
     /* Roof. A DIFFERENT colour from the bonnet, which is the whole reason the
        cabin reads as a cabin — drawn in `colorTop` like the bonnet, the two
        merged into one lighter slab and the car went back to being a block. */
-    const quad = function (pts, fill, stroke) {
-      ctx.beginPath();
-      ctx.moveTo(pts[0].sx, pts[0].sy);
-      for (let k = 1; k < pts.length; k++) ctx.lineTo(pts[k].sx, pts[k].sy);
-      ctx.closePath();
-      if (fill) { ctx.fillStyle = fill; ctx.fill(); }
-      if (stroke) { ctx.strokeStyle = stroke; ctx.stroke(); }
-    };
+    ctx.lineWidth = lineW;
     quad(ctop, S.roof, S.line);
 
     /* ── WINDSCREEN AND REAR WINDOW ────────────────────────────────────────
@@ -11898,26 +12764,71 @@ BR.Renderer = {
           lp(cb - L * 0.13, cw * 0.86, cz1 - 0.2), lp(cb - L * 0.13, -cw * 0.86, cz1 - 0.2)],
          S.glassBack, null);
 
-    // Gloss: one pale streak along the roof. Painted plastic has a highlight
-    // and matte cardboard does not.
-    quad([lp(cf * 0.86, -cw * 0.56, cz1 + 0.02), lp(cb * 0.86, -cw * 0.56, cz1 + 0.02),
-          lp(cb * 0.86, -cw * 0.14, cz1 + 0.02), lp(cf * 0.86, -cw * 0.14, cz1 + 0.02)],
-         'rgba(255,255,255,0.18)', null);
+    /* ── SHEEN, THE ROOF HALF ──────────────────────────────────────────────
+       The gloss used to be one pale streak nailed to the car's left, at a
+       fixed 0.18. That is a sticker: it stayed on the left through every
+       corner of the game while the shadow under the car swung right round.
+       Now it sits on whichever flank faces the light and walks across as the
+       car turns, and it is the same streak as the one on the shell below —
+       one highlight down a car that happens to have a cabin in the way.
 
-    /* Headlights. Two dots, and they do more than they should — they give the
-       car a FACE, which is the difference between a toy and a wedge. */
-    const hz = S.ride + S.bodyH + 0.02;
-    ctx.fillStyle = S.lamp;
+       `litY` is 0 when the light is straight up the car's nose, so the streak
+       is weakest there and strongest side-on, which is what a crowned surface
+       does. It is CENTRED then OFFSET rather than spanning from the middle out
+       to the lit edge: the first version did the latter and at the two
+       headings where the light ran along the car the streak collapsed to zero
+       width, so the sheen blinked out twice a lap.
+
+       Wood gets `spec: 0` and is skipped entirely — an old wooden car does not
+       shine, and that is the point of it. */
+    if (sheenCol) {
+      const rc = litY * cw * 0.44, rh = cw * 0.17;
+      quad([lp(cf * 0.90, rc - rh, cz1 + 0.02), lp(cb * 0.90, rc - rh, cz1 + 0.02),
+            lp(cb * 0.90, rc + rh, cz1 + 0.02), lp(cf * 0.90, rc + rh, cz1 + 0.02)],
+           sheenCol, null);
+    }
+
+    /* The roof's own length of the parting line. It skips the glass at both
+       ends: the windscreen and rear window are painted on this shell rather
+       than moulded into it, and a mould line ruled across them would cut the
+       one shape that makes the car read as a car in half. */
+    if (MAT.seam > 0.01) seamPair(cf, cb, cz1 + 0.05);
+
+    /* ── THE NOSE ──────────────────────────────────────────────────────────
+       A moulded bar across the very front in the trim colour, with the two
+       lamps set into its outer ends. All on the TOP face.
+
+       THE BUMPER WAS ON THE FRONT ELEVATION, and that was the worst thing on
+       the car. At `groundTilt` 0.30 a body 5 units tall lifts 4.3 units up the
+       screen while its own top face reaches 8.4 units down it, so the nose
+       face is entirely behind the bonnet — traced on Red Racer, the nose
+       occupies screen rows -10.8 to -6.5 and the top face covers -10.8 to
+       -2.4. Drawn last, the bumper was therefore painted straight over the
+       middle of the bonnet: a pale slab two thirds of the width of the car,
+       lying across the paint like a racing stripe. It is plainly there in the
+       before shot and reads as a marking rather than as a part.
+
+       This is the same rule the windscreen already learned two phases ago and
+       the guide states outright — a vertical pane at this camera is worth
+       about two pixels. It applies to every face, not just the glass.
+
+       ONE BAND, NOT THREE. The bumper and the two lamps were separate features
+       0.10 and 0.12 of a car-length apart, which the 30% depth squash turns
+       into 0.4 of a pixel at racing zoom: three pale marks landing on top of
+       each other, and the nose came out as a smear rather than as a face.
+       There is room for exactly one feature across the front of a car at this
+       size, so the lamps now sit INSIDE the bumper, at its outer ends, with
+       the trim colour showing between them. That is also what a toy car's
+       front looks like from above — a bar with two lights in it. */
+    const hz = S.ride + S.bodyH + 0.04;
+    quad([lp(L * 0.99, -W * 0.58, hz), lp(L * 0.99, W * 0.58, hz),
+          lp(L * 0.86, W * 0.64, hz), lp(L * 0.86, -W * 0.64, hz)],
+         spec.colorTrim, null);
     [-1, 1].forEach(function (side) {
-      quad([lp(L * 0.95, side * W * 0.34, hz), lp(L * 0.95, side * W * 0.60, hz),
-            lp(L * 0.84, side * W * 0.62, hz), lp(L * 0.84, side * W * 0.36, hz)],
+      quad([lp(L * 0.97, side * W * 0.32, hz), lp(L * 0.97, side * W * 0.56, hz),
+            lp(L * 0.88, side * W * 0.60, hz), lp(L * 0.88, side * W * 0.34, hz)],
            S.lamp, null);
     });
-    // And a bumper, in the trim colour, so the nose is not bare.
-    quad([lp(L * 0.99, -W * 0.66, S.ride + S.bodyH * 0.42),
-          lp(L * 0.99, W * 0.66, S.ride + S.bodyH * 0.42),
-          lp(L * 0.99, W * 0.66, S.ride + S.bodyH * 0.06),
-          lp(L * 0.99, -W * 0.66, S.ride + S.bodyH * 0.06)], spec.colorTrim, null);
 
     if (v.isGhost) ctx.restore();
   },
@@ -11929,13 +12840,78 @@ BR.Renderer = {
      The derivations are characterisation, not arithmetic for its own sake:
      a heavy vehicle sits taller on bigger wheels, a nimble one is squat with
      its cabin further back. 09_Vehicles.md: "material is characterisation". */
+  /* ── WHAT A CAR IS MADE OF, AS LIGHT ───────────────────────────────────────
+     09_Vehicles.md has carried an open item since Phase 10 titled "Still open:
+     the visual half": every vehicle declares a `material`, 13_Audio.md gives
+     each one a voice, and "a die-cast car should catch light differently from a
+     moulded plastic one and a wooden one should not shine at all, and none of
+     that is drawn yet — the field exists and the renderer ignores it". This
+     table is the renderer no longer ignoring it.
+
+     None of it is a stat. Every number here is an alpha or a tint, and the
+     amplitudes are small on purpose: a vehicle's HUE is the only thing telling
+     a player who just went past, here and on the minimap, so material may
+     modulate the colour and may never compete with it.
+
+       body   how far a flank swings between facing the light and facing away
+       spec   the sheen on the top faces. Wood is 0 and means it
+       rim    the white catch along the moulded shoulder
+       seam   how plainly the parting line of the mould shows
+       wear   opacity of the rubbed patches; chip is what is under the paint  */
+  MATERIAL_LOOK: {
+    // Injection-moulded shell: a hard bright rim, a tight sheen, and the
+    // clearest parting line of the four — a cheap toy is not tidied up.
+    plastic: { body: 0.13, spec: 0.30, rim: 0.30, seam: 1.00,
+               wear: 0.26, chip: '#f4f1e8' },
+    // Die-cast: painted metal swings widest between its lit and unlit faces,
+    // and the seam is a filed-down line on the base rather than a ridge.
+    metal:   { body: 0.19, spec: 0.24, rim: 0.44, seam: 0.45,
+               wear: 0.34, chip: '#c9ccd2' },
+    // Wood does not shine. It is nearly Lambertian, it has no mould at all,
+    // and the Heirloom is the one car in the room a player should be able to
+    // pick out by the fact that nothing on it catches the light.
+    wood:    { body: 0.09, spec: 0.00, rim: 0.10, seam: 0.00,
+               wear: 0.36, chip: '#d8bb8e', grain: 1 },
+    // Lithographed tin: the shiniest thing on the grid, and a folded seam
+    // rather than a moulded one, so it is there but faint.
+    windup:  { body: 0.16, spec: 0.42, rim: 0.48, seam: 0.35,
+               wear: 0.32, chip: '#e6e0cd' },
+  },
+
+  /* Outward normals of the cabin's four faces, in the car's own frame: nose,
+     left, tail, right. The cabin is a rectangle at every size, so unlike the
+     footprint these never need computing. */
+  CABIN_N: [0, Math.PI / 2, Math.PI, -Math.PI / 2],
+
+  /* A QUANTISED TINT CACHE. shade() parses a hex string and builds a new one on
+     every call, and lighting the faces individually asks for a dozen per car —
+     a hundred string allocations a frame at a full grid, for maybe fifteen
+     distinct values. Rounded to 1/24 the eye cannot tell the difference and the
+     map settles after the first corner.
+
+     ONE CACHE PER BASE COLOUR, which is why the cache is a parameter rather
+     than looked up from the shape: a single map keyed only on the amount would
+     hand back a tint of the body colour when the shoulder asked for a tint of
+     the roof colour, and the bug would look like a paint fault rather than a
+     cache fault. */
+  tintOf(cache, hex, amt) {
+    const k = amt < -1 ? -24 : amt > 1 ? 24 : Math.round(amt * 24);
+    let t = cache[k];
+    if (t === undefined) t = cache[k] = this.shade(hex, k / 24);
+    return t;
+  },
+
   shapeFor(spec) {
     if (spec._shape) return spec._shape;
     const heavy = BR.M.clamp((spec.weight - 0.6) / 0.9, 0, 1);
     const H = spec.height;
     const s = {
-      wheelR: Math.max(3.2, spec.length * (0.15 + 0.02 * heavy)),
-      track:  spec.width * 0.17,          // how far the wheels stand proud
+      /* CHUNKIER than they were. A toy car's wheels are over-scaled — the
+         mould has to survive a child — and they are the strongest thing in the
+         silhouette saying this is an object rather than a marker. Raised from
+         0.15 and a 0.17 track; beyond this they start to read as a buggy. */
+      wheelR: Math.max(3.4, spec.length * (0.17 + 0.025 * heavy)),
+      track:  spec.width * 0.20,          // how far the wheels stand proud
       ride:   H * (0.20 + 0.10 * heavy),
       bodyH:  H * 0.46,
       cabinH: H * (0.34 + 0.08 * heavy),
@@ -11958,7 +12934,55 @@ BR.Renderer = {
       glassBack: 'rgba(126,178,206,0.62)',
       lamp:  'rgba(255,244,214,0.95)',
       foot: this.chamferedFootprint,
+      mat:  this.MATERIAL_LOOK[spec.material] || this.MATERIAL_LOOK.plastic,
+      tints: {},        // tints of colorBody, for the flanks
+      tintsTop: {},     // tints of colorTop, for the shoulders of the shell
+      // The two sides of the parting ridge. Both are tints of the body, never
+      // a third hue — the same rule the roof and the outline already follow.
+      seamDark: this.shade(spec.colorBody, -0.50),
+      seamLit:  this.shade(spec.colorTop, 0.42),
     };
+
+    /* Outward normal of every footprint edge, in the car's OWN frame. The
+       footprint is fixed for a given vehicle, so these are computed once here
+       and the per-frame cost of lighting a flank is one addition and the cosine
+       inside faceLight(). Normal of edge a->b is (dy, -dx): checked against the
+       nose edge, which must come out pointing along +x. */
+    const foot = this.chamferedFootprint(spec.length / 2, spec.width / 2);
+    s.normals = [];
+    for (let i = 0; i < foot.length; i++) {
+      const j = (i + 1) % foot.length;
+      s.normals.push(Math.atan2(-(foot[j][0] - foot[i][0]), foot[j][1] - foot[i][1]));
+    }
+
+    /* Rubbed paint, seeded off the vehicle id — never off Math.random(), which
+       would differ between two renders of the same frame and, worse, consume
+       the shared stream the AI draws from. Kept to the corners of the bonnet
+       and the boot, clear of the cabin drawn over them, and inside the chamfer
+       so a patch cannot hang off the edge of the shell it is worn into. */
+    let h = 2166136261;
+    for (let i = 0; i < spec.id.length; i++) {
+      h = Math.imul(h ^ spec.id.charCodeAt(i), 16777619);
+    }
+    const rnd = function () {
+      h = (h + 0x6D2B79F5) | 0;
+      let x = Math.imul(h ^ (h >>> 15), 1 | h);
+      x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x;
+      return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+    };
+    const L = spec.length / 2, W = spec.width / 2;
+    /* One patch forward, one aft, one either way, and the sides alternate.
+       Three free draws put two of them within half a patch of each other on
+       Red Racer and they read as one smudge rather than as wear. */
+    const side = rnd() < 0.5 ? -1 : 1;
+    const ends = [1, -1, rnd() < 0.5 ? -1 : 1];
+    s.wear = [];
+    for (let i = 0; i < 3; i++) {
+      const fx = ends[i] * L * (0.63 + rnd() * 0.24);
+      const fy = side * (i === 1 ? -1 : 1) * W * (0.24 + rnd() * 0.32);
+      s.wear.push([fx, fy, L * (0.05 + rnd() * 0.05), W * (0.07 + rnd() * 0.07)]);
+    }
+
     spec._shape = s;
     return s;
   },
