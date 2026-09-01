@@ -535,8 +535,35 @@ BR.PHYSICS = {
 };
 
 /* ── SURFACES ──────────────────────────────────────────────────────────────
-   Multiplicative modifiers. Phase 1 only uses rugRoad, but the lookup is
-   wired so surface zones drop straight in at Phase 3. See 05_Tracks.md.    */
+   Multiplicative modifiers. See 05_Tracks.md.
+
+   EVERY ONE OF THESE IS DRIVEN ON. That was not always true — this table was
+   written in Phase 1, when only `rugRoad` was reachable and the rest were a
+   promise that surface zones would drop in later. The promise came good, and
+   the comment saying otherwise outlived it by six phases.
+
+   Which track declares which, counted over the twelve files by the value and
+   not by the word, so a mention in a comment does not count:
+
+     rugRoad     Rug Loop, and what TrackManager falls back to when a track
+                 declares no baseSurface at all
+     rugGrass    both kitchen tracks, both sofa tracks — 4
+     hardwood    Bedside Boulevard, both kitchen, both sofa, and the bedroom
+                 floor UNDER both stunt decks — 7, the widest use here
+     blanket     Bedside Boulevard, both kitchen, both sofa — 5
+     plastic     the moulded decks on the two stunt tracks — 2
+     paper       both kitchen tracks, both sofa tracks — 4
+     bookCover   Bedside Boulevard, and nowhere else — 1, the narrowest use in
+                 the table, and still a real one
+     sand        the four Sandbox tracks — 4
+     looseSand   the four Sandbox tracks, and both sofa tracks — 6
+     puddle      both kitchen, all four Sandbox, both sofa — 8
+     packedSand  NEVER declared by a track, and correctly so: it is what sand
+                 becomes when it is driven on, blended in by SandGrid
+
+   A surface with no track is dead tuning, so add the track in the same commit
+   as the numbers. `plastic` sat here fully tuned and unreachable until the
+   stunt decks stopped silently defaulting to carpet.                        */
 BR.SURFACES = {
   rugRoad:   { grip: 1.00, maxSpeed: 1.00, accel: 1.00 },
   rugGrass:  { grip: 0.95, maxSpeed: 0.82, accel: 0.90 },
@@ -1708,7 +1735,44 @@ BR.collisionRadius = function (spec) {
    Skipping this is not a small error. Bedside and Sandbox shipped their first
    pass with hand-guessed times and gold sat 18-37 SECONDS off the pace — every
    medal free on the first attempt, and the whole reward curve dead on arrival.
-   Neither was visible without simulating the race. */
+   Neither was visible without simulating the race.
+
+   ── THE LADDER IS A DESIGN CHOICE, THE TIMES ARE MEASURED FACTS ───────────
+   When the two disagree, move the ladder. `unlockStars` costs nothing to
+   change; a target time is a measurement of a track and changing one silently
+   invalidates every medal earned against it.
+
+   THE LADDER WAS ONCE UNPLAYABLE AND NOTHING CAUGHT IT. It grew from 14 events
+   to 26 while every gate kept a rigid +3 step, so the last gate walked out to
+   59 of the 78 stars that exist — 76% of everything, with no check anywhere
+   asking whether 59 could be earned. Simulated from a wiped save, the
+   reference stand-in stalled on the SECOND EVENT with 2 stars and never opened
+   another gate; 24 of the 26 events were unreachable. A weaker stand-in did
+   exactly the same. The whole game past the rug was dead content.
+
+   The cause was not the gates on their own. It was that every objective in the
+   ladder except `finish` and one `podium` asked for play ABOVE the reference:
+   the reference could reach 32 of 78 stars, so no gate above 32 could ever
+   open, however the steps were spaced.
+
+   TWO RULES NOW HOLD, and both are checkable:
+
+     1. EVERY EVENT PAYS SOMETHING FOR SHOWING UP. Five events used to award
+        the reference nothing at all — you raced, you finished, and the game
+        gave you no credit. Every event now carries one star ordinary play
+        earns, one that asks you to race well, and one that is genuinely hard.
+
+     2. NO GATE MAY EXCEED WHAT THE REFERENCE CAN HAVE EARNED BY THAT POINT,
+        less a two-star buffer. That is where these numbers come from — they
+        are not a step, they are a running total minus slack. The last gate is
+        44 of 78, so a third of the stars in the game sit BEYOND the ladder,
+        which is what mastery content is for.
+
+   Platinum times are no longer objectives anywhere. Beating one already awards
+   the platinum MEDAL — making it a star as well paid twice for one act and,
+   worse, made mastery load-bearing for progression. Nine of the 78 stars were
+   behind a time 11.5% quicker than the reference; those are `clean` now, and
+   the clock keeps the medal it always had. */
 
 window.BR = window.BR || {};
 
@@ -1740,11 +1804,11 @@ BR.EVENTS = [
     opponents: 4,
     difficulty: 'normal',
     platinumTime: 87,
-    unlockStars: 2,
+    unlockStars: 1,
     objectives: [
-      { id: 'win',      label: 'Win the race' },
+      { id: 'finish',   label: 'Finish the race' },
+      { id: 'podium',   label: 'Finish on the podium' },
       { id: 'drifter',  label: 'Spend 6 seconds drifting' },
-      { id: 'lap',      label: 'Set a lap under 29 seconds' },
     ],
   },
   {
@@ -1759,9 +1823,9 @@ BR.EVENTS = [
     platinumTime: 143,
     unlockStars: 5,
     objectives: [
+      { id: 'podium',   label: 'Finish on the podium' },
       { id: 'win',      label: 'Win the race' },
-      { id: 'spotless', label: 'Win without a single collision' },
-      { id: 'lap',      label: 'Set a lap under 27 seconds' },
+      { id: 'drifter',  label: 'Spend 6 seconds drifting' },
     ],
   },
 ];
@@ -1785,11 +1849,12 @@ BR.EVENTS.push(
     difficulty: 'normal',
     times: { gold: 86, silver: 94, bronze: 105 },
     platinumTime: 80,
-    unlockStars: 3,
+    unlockStars: 2,
+    lapUnder: 29,
     objectives: [
       { id: 'finish',  label: 'Set a time' },
-      { id: 'ttGold',  label: 'Beat the gold time' },
       { id: 'lap',     label: 'Set a lap under 29 seconds' },
+      { id: 'ttGold',  label: 'Beat the gold time' },
     ],
   },
   {
@@ -1802,11 +1867,11 @@ BR.EVENTS.push(
     opponents: 5,
     difficulty: 'normal',
     platinumTime: 102,          // x 0.9934, measured when particles stopped drawing from the AI stream
-    unlockStars: 6,
+    unlockStars: 7,
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
-      { id: 'win',     label: 'Win the race' },
       { id: 'clean',   label: 'Finish with fewer than 4 collisions' },
+      { id: 'win',     label: 'Win the race' },
     ],
   },
   {
@@ -1820,11 +1885,11 @@ BR.EVENTS.push(
     difficulty: 'normal',
     times: { gold: 103, silver: 112, bronze: 126 },
     platinumTime: 96,
-    unlockStars: 9,
+    unlockStars: 11,
     objectives: [
       { id: 'finish',  label: 'Set a time' },
+      { id: 'clean',   label: 'Three laps, fewer than 4 impacts' },
       { id: 'ttGold',  label: 'Beat the gold time' },
-      { id: 'ttPlat',  label: 'Beat the platinum time' },
     ],
   }
 );
@@ -1844,11 +1909,11 @@ BR.EVENTS.push(
     opponents: 4,
     difficulty: 'normal',
     platinumTime: 85,
-    unlockStars: 8,
+    unlockStars: 9,
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
-      { id: 'win',     label: 'Win the race' },
       { id: 'clean',   label: 'Finish with fewer than 4 collisions' },
+      { id: 'win',     label: 'Win the race' },
     ],
   },
   {
@@ -1862,11 +1927,11 @@ BR.EVENTS.push(
     difficulty: 'normal',
     times: { gold: 90, silver: 99, bronze: 110 },
     platinumTime: 84,
-    unlockStars: 12,
+    unlockStars: 13,
     objectives: [
       { id: 'finish',  label: 'Set a time' },
+      { id: 'clean',   label: 'Three laps, fewer than 4 impacts' },
       { id: 'ttGold',  label: 'Beat the gold time' },
-      { id: 'ttPlat',  label: 'Beat the platinum time' },
     ],
   },
 
@@ -1884,11 +1949,11 @@ BR.EVENTS.push(
     opponents: 5,
     difficulty: 'normal',
     platinumTime: 76,           // x 1.0155, measured when particles stopped drawing from the AI stream
-    unlockStars: 14,
+    unlockStars: 15,
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
+      { id: 'podium',  label: 'Finish on the podium' },
       { id: 'win',     label: 'Win the race' },
-      { id: 'clean',   label: 'Finish with fewer than 4 collisions' },
     ],
   },
   {
@@ -1904,8 +1969,8 @@ BR.EVENTS.push(
     unlockStars: 17,
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
-      { id: 'win',     label: 'Win the race' },
       { id: 'clean',   label: 'Finish with fewer than 4 collisions' },
+      { id: 'win',     label: 'Win the race' },
     ],
   },
   {
@@ -1918,11 +1983,11 @@ BR.EVENTS.push(
     opponents: 7,
     difficulty: 'hard',
     platinumTime: 84,           // 0.93 x 90.8, scaled when the grid stopped double-booking a slot
-    unlockStars: 20,
+    unlockStars: 21,
     objectives: [
+      { id: 'podium',   label: 'Finish on the podium' },
       { id: 'win',      label: 'Win the race' },
       { id: 'spotless', label: 'Win without a single collision' },
-      { id: 'clean',    label: 'Finish with fewer than 4 collisions' },
     ],
   },
   {
@@ -1936,11 +2001,11 @@ BR.EVENTS.push(
     difficulty: 'normal',
     times: { gold: 87, silver: 95, bronze: 106 },   // clean reference 91.0
     platinumTime: 79,
-    unlockStars: 23,
+    unlockStars: 22,
     objectives: [
       { id: 'finish',  label: 'Set a time' },
+      { id: 'clean',   label: 'Three laps, fewer than 4 impacts' },
       { id: 'ttGold',  label: 'Beat the gold time' },
-      { id: 'ttPlat',  label: 'Beat the platinum time' },
     ],
   }
 );
@@ -1966,11 +2031,11 @@ BR.EVENTS.push(
        after, so every target here is scaled by that measured 0.983 and nothing
        else on the board moved by so much as a tick. */
     platinumTime: 93,           // x 0.9936, measured when the deck became plastic
-    unlockStars: 26,
+    unlockStars: 24,
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
-      { id: 'win',     label: 'Win the race' },
       { id: 'clean',   label: 'Finish with fewer than 4 collisions' },
+      { id: 'win',     label: 'Win the race' },
     ],
   },
   {
@@ -1984,11 +2049,11 @@ BR.EVENTS.push(
     difficulty: 'normal',
     times: { gold: 95, silver: 104, bronze: 116 },   // x 0.9921, the plastic deck
     platinumTime: 88,
-    unlockStars: 29,
+    unlockStars: 26,
     objectives: [
       { id: 'finish',  label: 'Set a time' },
+      { id: 'clean',   label: 'Three laps, fewer than 4 impacts' },
       { id: 'ttGold',  label: 'Beat the gold time' },
-      { id: 'ttPlat',  label: 'Beat the platinum time' },
     ],
   }
 );
@@ -2004,11 +2069,11 @@ BR.EVENTS.push(
     opponents: 7,
     difficulty: 'hard',
     platinumTime: 95,           // x 0.9798, measured when the deck became plastic
-    unlockStars: 32,
+    unlockStars: 28,
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
-      { id: 'win',     label: 'Win the race' },
       { id: 'clean',   label: 'Finish with fewer than 4 collisions' },
+      { id: 'win',     label: 'Win the race' },
     ],
   },
   {
@@ -2022,11 +2087,11 @@ BR.EVENTS.push(
     difficulty: 'normal',
     times: { gold: 97, silver: 107, bronze: 120 },   // x 0.9914, the plastic deck
     platinumTime: 91,
-    unlockStars: 35,
+    unlockStars: 30,
     objectives: [
       { id: 'finish',  label: 'Set a time' },
+      { id: 'clean',   label: 'Three laps, fewer than 4 impacts' },
       { id: 'ttGold',  label: 'Beat the gold time' },
-      { id: 'ttPlat',  label: 'Beat the platinum time' },
     ],
   }
 );
@@ -2052,13 +2117,19 @@ BR.EVENTS.push(
        103.0 / 103.1 / 103.2 / 103.3, quickest taken. Laps 35.7 / 33.8 / 33.5 —
        the longest circuit in the game, and the slowest race in it. */
     platinumTime: 96,
-    unlockStars: 38,
+    unlockStars: 32,
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
+      { id: 'clean',   label: 'Finish with fewer than 4 collisions' },
       { id: 'win',     label: 'Win the race' },
-      // Laminate at 0.78 grip drifts almost by itself. Six seconds is a low
-      // bar here on purpose — it is an invitation to find that out.
-      { id: 'drifter', label: 'Spend 6 seconds drifting' },
+      /* WAS `drifter`, on the claim that "laminate at 0.78 grip drifts almost
+         by itself". Measured, it does not: the reference stand-in banks 0.0,
+         0.0 and 0.1 seconds of drift across three runs here — the lowest
+         figure of any event in the game, on the track that supposedly gives
+         drift away. Low grip is not the same thing as high slip angle; the car
+         washes wide instead of rotating, so the drift test never fires.
+         The drift objectives live on the rug, where the reference actually
+         banks 4-9 seconds without trying. */
     ],
   },
   {
@@ -2073,11 +2144,11 @@ BR.EVENTS.push(
     // Four solo runs: 103.9 / 104.0 / 104.1 / 104.3. Clean reference 103.9.
     times: { gold: 99, silver: 108, bronze: 121 },
     platinumTime: 92,
-    unlockStars: 41,
+    unlockStars: 34,
     objectives: [
       { id: 'finish',  label: 'Set a time' },
+      { id: 'clean',   label: 'Three laps, fewer than 4 impacts' },
       { id: 'ttGold',  label: 'Beat the gold time' },
-      { id: 'ttPlat',  label: 'Beat the platinum time' },
     ],
   },
   {
@@ -2094,11 +2165,11 @@ BR.EVENTS.push(
        850 units shorter, and on laminate it is grip rather than distance that
        costs the time. */
     platinumTime: 89,
-    unlockStars: 44,
+    unlockStars: 36,
     objectives: [
+      { id: 'podium',   label: 'Finish on the podium' },
       { id: 'win',      label: 'Win the race' },
       { id: 'spotless', label: 'Win without a single collision' },
-      { id: 'clean',    label: 'Finish with fewer than 4 collisions' },
     ],
   },
   {
@@ -2113,11 +2184,11 @@ BR.EVENTS.push(
     // Four solo runs: 95.6 / 95.6 / 95.8 / 95.9. Clean reference 95.6.
     times: { gold: 91, silver: 99, bronze: 111 },
     platinumTime: 85,
-    unlockStars: 47,
+    unlockStars: 37,
     objectives: [
       { id: 'finish',  label: 'Set a time' },
+      { id: 'clean',   label: 'Three laps, fewer than 4 impacts' },
       { id: 'ttGold',  label: 'Beat the gold time' },
-      { id: 'ttPlat',  label: 'Beat the platinum time' },
     ],
   }
 );
@@ -2156,11 +2227,11 @@ BR.EVENTS.push(
        third shorter than the table's because a sofa is smaller than a table.
        An 11,000-unit sofa would be a forty-five-second lap. */
     platinumTime: 79,
-    unlockStars: 50,
+    unlockStars: 39,
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
-      { id: 'win',     label: 'Win the race' },
       { id: 'clean',   label: 'Finish with fewer than 4 collisions' },
+      { id: 'win',     label: 'Win the race' },
     ],
   },
   {
@@ -2178,11 +2249,11 @@ BR.EVENTS.push(
        to be taken. */
     times: { gold: 79, silver: 87, bronze: 97 },
     platinumTime: 74,
-    unlockStars: 53,
+    unlockStars: 41,
     objectives: [
       { id: 'finish',  label: 'Set a time' },
+      { id: 'clean',   label: 'Three laps, fewer than 4 impacts' },
       { id: 'ttGold',  label: 'Beat the gold time' },
-      { id: 'ttPlat',  label: 'Beat the platinum time' },
     ],
   },
   {
@@ -2200,17 +2271,17 @@ BR.EVENTS.push(
        for that: eight hundred units of hard flat ground end to end is the one
        place on the sofa where a car gets to run. */
     platinumTime: 78,
-    unlockStars: 56,
+    unlockStars: 43,
     objectives: [
+      { id: 'podium',   label: 'Finish on the podium' },
       { id: 'win',      label: 'Win the race' },
       { id: 'spotless', label: 'Win without a single collision' },
-      { id: 'clean',    label: 'Finish with fewer than 4 collisions' },
     ],
   },
   {
     id: 'tt-down-the-back',
     name: 'Down the Back Time Trial',
-    blurb: 'Three laps to find out how much of the chain you can actually hold.',
+    blurb: 'The last event in the box. Three laps of the chain, and nobody watching.',
     trackId: 'sofa-down-the-back',
     mode: 'time-trial',
     laps: 3,
@@ -2222,11 +2293,19 @@ BR.EVENTS.push(
        somewhere; in traffic it takes the tidy line and never tries. */
     times: { gold: 83, silver: 91, bronze: 102 },   // clean reference 87.4
     platinumTime: 77,
-    unlockStars: 59,
+    unlockStars: 44,
+    /* THE LAST EVENT IN THE BOOK, and the only one whose third star is a
+       perfect run rather than a fast one. `spotless` in a time trial reduces to
+       "position 1 and nothing touched" — position 1 is free when you are the
+       only car, so what it actually asks for is three laps of the hardest
+       circuit in the game without a single impact. The reference stand-in does
+       manage it, which is the point: the last star is a matter of care, not of
+       pace, and it is the one thing in the ladder you cannot buy with a fast
+       lap. */
     objectives: [
-      { id: 'finish',  label: 'Set a time' },
-      { id: 'ttGold',  label: 'Beat the gold time' },
-      { id: 'ttPlat',  label: 'Beat the platinum time' },
+      { id: 'finish',   label: 'Set a time' },
+      { id: 'ttGold',   label: 'Beat the gold time' },
+      { id: 'spotless', label: 'Three laps, nothing touched' },
     ],
   }
 );
@@ -2252,11 +2331,16 @@ BR.EVENTS.push(
     opponents: 7,
     difficulty: 'normal',
     platinumTime: 89,           // 0.93 x 95.9, re-measured from a mid-grid start
-    unlockStars: 4,
+    unlockStars: 3,
+    /* NO `clean` OBJECTIVE IN AN ITEM RACE. The mode exists to throw things at
+       you, and the reference stand-in takes 4-7 impacts a race here against 1-2
+       on the same track without items. Asking a player not to be hit in the one
+       mode built around being hit sets the objective against the mode. Placing
+       is the honest measure of an item race. */
     objectives: [
       { id: 'finish',  label: 'Finish the race' },
+      { id: 'podium',  label: 'Finish on the podium' },
       { id: 'win',     label: 'Win the race' },
-      { id: 'clean',   label: 'Finish with fewer than 4 collisions' },
     ],
   },
   {
@@ -2270,11 +2354,11 @@ BR.EVENTS.push(
     opponents: 7,
     difficulty: 'hard',
     platinumTime: 87,           // 0.93 x 92.8, scaled when the grid stopped double-booking a slot
-    unlockStars: 18,
+    unlockStars: 19,
     objectives: [
       { id: 'finish',   label: 'Finish the race' },
+      { id: 'podium',   label: 'Finish on the podium' },
       { id: 'win',      label: 'Win the race' },
-      { id: 'spotless', label: 'Win without a single collision' },
     ],
   }
 );
@@ -3349,11 +3433,25 @@ BR.TRACKS['stunt-dresser-drop'] = {
 
   /* All three sit beside FLOOR sections. A prop takes the height of the nearest
      centreline point, so one placed next to the raised deck hangs in mid-air
-     off the side of it. */
+     off the side of it.
+
+     BESIDE, and that is the half of the rule this file broke. The third block
+     was authored at (2250,2500) with the rest of the track, a phase before the
+     magnetic booster existed — and the booster was then laid straight over the
+     top of it. Measured after the fact: 37 units from the centreline of a
+     300-wide road, and 31 units off the axis of a ribbon 190 wide. A solid
+     eight-sided wall, 36 high, standing in the middle of the thing that grabs
+     the car and throws it. The AI had been swerving round it every lap since
+     (AIDriver.avoidProps), which is why the booster's own note records the
+     field running at -98 through a mouth centred on the line.
+
+     247 units out now, on the far side of the straight, on the floor and clear
+     of every ride. TrackManager.findMisplacedProps() checks both halves of the
+     rule on every build, so the next one cannot arrive quietly. */
   props: [
-    { type: 'block',  x: 1900, y: 3150, r: 32, h: 38, rot: 0.4 },
-    { type: 'crayon', x:  600, y: 2700, r: 30, h: 26, rot: 1.6 },
-    { type: 'block',  x: 2250, y: 2500, r: 30, h: 36, rot: 2.2 },
+    { type: 'block',  x: 1900, y: 3150, r: 32, h: 38, rot: 0.4 },   // z 0, 225 out
+    { type: 'crayon', x:  600, y: 2700, r: 30, h: 26, rot: 1.6 },   // z 0, 196 out
+    { type: 'block',  x: 1980, y: 2380, r: 30, h: 36, rot: 2.2 },   // z 0, 247 out
   ],
 
   /* The furniture the track is built over. Drawn on the floor, so the raised
@@ -3479,6 +3577,13 @@ BR.TRACKS['stunt-shelf-run'] = {
     { from: 0.55, to: 0.66, side: 'outer' },
   ],
 
+  /* NO `shortcut` CHORD, and the fork below is what stands in for it. A chord
+     cuts across a detour and needs ground under it; two of this track's three
+     decks are 210 and 440 units up with a bedroom floor underneath, so a cut
+     between them is a bridge to nowhere — the same reason both kitchen tracks
+     record for going without one. The route choice here is the gate: same
+     stretch of road, two entry speeds, two payouts. See 05_Tracks.md, which now
+     asks every track without a chord to say what it has instead. */
   zones: [],
 
   /* One ride, and it is a FORK — the track's switching gate.
@@ -3559,9 +3664,27 @@ BR.TRACKS['stunt-shelf-run'] = {
   ],
   hazards: [],
 
+  /* BOTH BESIDE FLOOR SECTIONS, and on this track that is a harder constraint
+     than it sounds. A prop takes the height of the nearest CENTRELINE point,
+     so what matters is not how far it is from the road but which stretch of
+     road is nearest — and on a figure-eight with three decks, most of the
+     west half of the room is nearest to the long drop rather than to the floor
+     underneath it.
+
+     The crayon used to sit at (620,2900). Measured: 303 units from a road
+     whose half-width is 150, nearest centreline index 101, lifted to z 394.5.
+     Rendered and looked at — it hung in the air off the outside of the drop,
+     over the floorboards, and its collision octagon hung there with it, drawn
+     as a grey barrier ring round nothing. Counted inside drawProp, so it is
+     post-cull: DRAWN in 661 of the 2410 frames of a lap. Eleven seconds a lap,
+     not a corner case.
+
+     So it is over here instead, beside the opening straight at t 0.12, where
+     the nearest centreline point is on the floor and z resolves to 0. Same
+     room, same distance off the road, standing on something. */
   props: [
-    { type: 'block',  x: 2300, y: 1250, r: 32, h: 38, rot: 0.4 },
-    { type: 'crayon', x:  620, y: 2900, r: 30, h: 26, rot: 1.6 },
+    { type: 'block',  x: 2300, y: 1250, r: 32, h: 38, rot: 0.4 },   // z 0, 441 out
+    { type: 'crayon', x: 3520, y: 2960, r: 30, h: 26, rot: 1.6 },   // z 0, 293 out
   ],
 
   /* The furniture it is all built over. */
@@ -5415,18 +5538,6 @@ BR.Rails = {
   },
 
   /**
-   * Arc length of the ribbon — how far the SURFACE runs, including the circle.
-   *
-   * No longer what paces the ride; see `step`. Kept because it is the honest
-   * description of the geometry and the renderer's stripe count reads it.
-   */
-  arcLength(R) {
-    // A booster has no circle in it, so its surface is exactly its length.
-    if (R.kind === 'booster') return R.length;
-    return Math.hypot(2 * Math.PI * R.radius * (R.turns || 1), R.length);
-  },
-
-  /**
    * How far a mouth reaches ALONG the direction of travel, from its centre.
    *
    * The entry box is axis-aligned and the road usually is not, so a mouth that
@@ -5553,9 +5664,10 @@ BR.Rails = {
     }
 
     /* PACED BY GROUND DISTANCE, NOT BY THE CIRCUMFERENCE OF THE CIRCLE.
-       This was `/ arcLength(R)`, which is the physically honest reading — going
-       round a vertical ring really is further than driving past it — and it
-       made every loop in the game a TRAP.
+       This divided by the ribbon's ARC LENGTH — hypot(2*PI*radius*turns,
+       length), the circle included — which is the physically honest reading,
+       going round a vertical ring really is further than driving past it, and
+       it made every loop in the game a TRAP.
 
        Measured on Shelf Run, identical driver, full laps: 32.55s with no rail,
        34.12s with the loop. The ride parked the car for 1.8 seconds and handed
@@ -6393,6 +6505,14 @@ BR.TrackManager = {
           h: p.h, clearAt: p.clearAt === undefined ? Infinity : p.clearAt,
           level: elevated ? pe.level : undefined,
           z: pe.z,
+          /* COLLISION ONLY. The prop itself is drawn by drawProp — as a crayon,
+             a bucket, a block — and this octagon exists so a car can hit it.
+             Without the flag the renderer treated all eight segments as track
+             barrier and drew them in the kerb palette, so every prop in the game
+             stood inside its own little coloured fence. On a crayon, which is
+             drawn lying down, the ring is taller and wider than the crayon and
+             encloses it, so it read as sitting in a grey tub. */
+          collisionOnly: true,
         });
       }
     }
@@ -6663,7 +6783,88 @@ BR.TrackManager = {
       out.hazards.forEach(function (h) { lift(h, h.x, h.y); });
       out.finishZ = elev[self.nearestIndex(line, def.finish[0], def.finish[1])].z;
     }
+
+    // AFTER the lift, because half of what it checks is the height the lift
+    // just handed out.
+    out.badProps = this.findMisplacedProps(out);
+
     return out;
+  },
+
+  /**
+   * Props that are in the wrong place, in the two ways a prop can be.
+   *
+   * BOTH of these shipped, and neither was visible from the data.
+   *
+   * **Hanging in the air.** A prop is authored in world coordinates and takes
+   * the height of the nearest CENTRELINE point, which on an elevated track is
+   * not a decision the author made — it is whichever stretch of road happens to
+   * be closest. Shelf Run's crayon sat 303 units from a road half 150 wide,
+   * inherited z 394.5 from the drop it was beside, and hung over the
+   * floorboards — drawn, counted inside `drawProp`, in 661 of the 2410 frames
+   * of a lap. Its collision octagon hung there too, drawn as a grey barrier
+   * ring round nothing at all.
+   *
+   * Collectibles cannot make this mistake, because they are authored against
+   * the track (`t`/`offset`) rather than against the room — see the note on
+   * hand-placed pieces in 05_Tracks.md. Props still are, so they need the
+   * check instead.
+   *
+   * **Standing inside a ride.** Dresser Drop's third block was authored a phase
+   * before the magnetic booster, and the booster was laid over the top of it:
+   * 31 units off the axis of a 190-wide ribbon that grabs the car and throws it
+   * at 1.55x. Nothing complained. The AI quietly swerved round it every lap.
+   *
+   * Reported on `arena.badProps` and as a console warning, the same shape as
+   * `findStrayRects` — silence is the wrong response to scenery in the road.
+   */
+  findMisplacedProps(out) {
+    const line = out.centreline, half = out.halfWidth;
+    const rails = out.rails || [];
+    const bad = [];
+
+    for (let i = 0; i < out.props.length; i++) {
+      const p = out.props[i];
+      const where = 'prop[' + i + '] ' + p.type + ' at ' +
+                    Math.round(p.x) + ',' + Math.round(p.y);
+
+      /* Lifted clear of the ground with no deck under it. HALF-WIDTH IS THE
+         WHOLE TEST, and it holds even on a track that is elevated end to end
+         like the kitchen table: `drawGround` fills the bounds quad at z 0
+         always, so the only thing ever drawn at height is the road. Past the
+         kerb there is nothing but air, whatever the nearest centreline point
+         happens to say. */
+      if ((p.z || 0) > 0) {
+        const c = line[this.nearestIndex(line, p.x, p.y)];
+        const d = Math.hypot(c[0] - p.x, c[1] - p.y);
+        if (d > half) {
+          bad.push(where + ' is ' + Math.round(d) + ' from the centreline of a ' +
+                   'deck ' + Math.round(half) + ' half-wide, lifted to z ' +
+                   Math.round(p.z) + ' — it hangs in mid-air');
+        }
+      }
+
+      /* Standing in a rail's ribbon. The mouth is corner-anchored like every
+         other rectangle in a track file; the ride runs `length` along `dir`
+         from its centre and is `width` across. */
+      for (let r = 0; r < rails.length; r++) {
+        const R = rails[r];
+        const mx = R.x + R.w / 2, my = R.y + R.h / 2;
+        const ex = mx + R.dir[0] * R.length, ey = my + R.dir[1] * R.length;
+        const d = this.distToSegment(p.x, p.y, mx, my, ex, ey);
+        const clear = R.width / 2 + (p.r || 26);
+        if (d < clear) {
+          bad.push(where + ' stands ' + Math.round(d) + ' from the axis of ' +
+                   (R.kind || 'loop') + '[' + r + '], inside its ' +
+                   R.width + '-wide ribbon');
+        }
+      }
+    }
+
+    if (bad.length && typeof console !== 'undefined') {
+      console.warn('TRACK ' + out.id + ': ' + bad.join('; '));
+    }
+    return bad;
   },
 
   /**
@@ -7423,11 +7624,10 @@ BR.AIDriver = {
     return input;
   },
 
-  /** Distance to the closest other car. */
   /**
    * Distance to the nearest rival IN FRONT, or Infinity if there is none.
    *
-   * Targeting used `nearestRival`, which is omnidirectional, and in an
+   * Targeting used to ask for the nearest rival in ANY direction, and in an
    * eight-car pack somebody is nearly always within a few hundred units in
    * SOME direction. So a high-skill driver never had to wait for a target and
    * fired the instant it was handed anything — measured at a 0.02s median
@@ -7451,18 +7651,6 @@ BR.AIDriver = {
       if (along <= 0) continue;
       const d = Math.hypot(dx, dy);
       if (along < d * 0.55) continue;          // off to one side, not in front
-      if (d < best) best = d;
-    }
-    return best;
-  },
-
-  nearestRival(v) {
-    const list = (BR.Game && BR.Game.vehicles) || [];
-    let best = Infinity;
-    for (let i = 0; i < list.length; i++) {
-      const o = list[i];
-      if (o === v || o.isGhost) continue;
-      const d = Math.hypot(o.x - v.x, o.y - v.y);
       if (d < best) best = d;
     }
     return best;
@@ -9300,6 +9488,13 @@ BR.SaveManager = {
         autoAccelerate: true,
         mapSize: 0.82,
         cornerHint: 1,
+
+        /* Has this seat been shown how to play (src/ui/Coach.js). A SETTING,
+           not progress, and deliberately: reset() keeps settings and import
+           keeps this device's, so wiping your stars or pasting in a save code
+           does not hand you the first-run lessons again. See the note at the
+           top of Coach.js. */
+        taught: false,
       },
 
       progression: {
@@ -9471,13 +9666,11 @@ BR.SaveManager = {
     }
   },
 
-  wipe() {
-    this.data = this.defaults();
-    if (this.storageOk) {
-      try { window.localStorage.removeItem(this.KEY); } catch (e) {}
-    }
-    this.saveNow();
-  },
+  /* There was a `wipe()` here that took everything, settings included. Nothing
+     called it: the only reset the game offers is the two-step button on the
+     main menu, and that goes through `reset()`, which deliberately KEEPS
+     settings (15_Save_System.md q4). Two functions for "start again" that
+     disagree about volume and difficulty is one too many. */
 
   /* ══ SAVE CODES ═══════════════════════════════════════════════════════════
      15_Save_System.md open question 2. LocalStorage is per-origin AND per
@@ -10125,6 +10318,65 @@ BR.ProgressionManager = {
     return out;
   },
 
+  /* ── the end of the career ─────────────────────────────────────────────
+     A career that cannot be finished is not a career, it is a list. Before
+     this there was no expression anywhere in the game for "you have done it" —
+     the ladder simply ran out, and the only terminal event of any kind was a
+     3.2-second banner during a race when the last toy piece was touched.
+
+     Three distinct endings, deliberately, because they are three different
+     kinds of thorough and 06_Progression_Career.md wants them told apart:
+
+       finished   every event raced and medalled — you have seen all of it
+       collected  every toy piece found — the Heirloom, and the only thing
+                  stars cannot buy (09_Vehicles.md)
+       perfect    both, plus every star
+
+     These are QUERIES, not state: nothing is stored, so they cannot drift out
+     of step with the save and they are correct the moment a save is imported
+     by code. */
+
+  /* Reads the map directly rather than going through eventRecord(), which
+     CREATES a record for anything it is asked about. This is called twice per
+     race from record(); routing it through eventRecord would quietly write an
+     empty entry for all 26 events into every save on the first finish. */
+  eventsFinished() {
+    const evs = this.save().progression.events;
+    let n = 0;
+    for (let i = 0; i < BR.EVENTS.length; i++) {
+      const rec = evs[BR.EVENTS[i].id];
+      if (rec && rec.medal && rec.medal !== 'none') n++;
+    }
+    return n;
+  },
+
+  /** Every event raced to a medal. The ladder's own ending. */
+  careerComplete() {
+    return BR.EVENTS.length > 0 &&
+           this.eventsFinished() === BR.EVENTS.length;
+  },
+
+  /** Nothing left in the game. */
+  careerPerfect() {
+    return this.careerComplete() && this.setComplete() &&
+           this.stars() >= this.maxStars();
+  },
+
+  /** One call for anything that wants to show where the player is. */
+  careerState() {
+    return {
+      events:    this.eventsFinished(),
+      eventsOf:  BR.EVENTS.length,
+      stars:     this.stars(),
+      starsOf:   this.maxStars(),
+      pieces:    this.piecesFound().length,
+      piecesOf:  this.piecesTotal(),
+      complete:  this.careerComplete(),
+      collected: this.setComplete(),
+      perfect:   this.careerPerfect(),
+    };
+  },
+
   /* What a locked vehicle needs. Locked content stays visible so the player can
      see what is coming (11_UI.md). */
   unlockFor(vehicleId) {
@@ -10232,10 +10484,15 @@ BR.ProgressionManager = {
     const rec = this.eventRecord(event.id);
     rec.played++;
 
+    // Sampled BEFORE this race's medal lands, so "did this race finish the
+    // career?" can be answered by comparing the two.
+    const wasComplete = this.careerComplete();
+
     const out = {
       medal: 'none', medalImproved: false,
       newObjectives: [], starsGained: 0,
       unlocked: [], personalBest: false,
+      careerComplete: false, careerPerfect: false,
     };
 
     if (!r.finished) {
@@ -10281,6 +10538,35 @@ BR.ProgressionManager = {
     // ── unlocks ────────────────────────────────────────────────────────────
     out.unlocked = this.applyUnlocks();
 
+    /* THE HEIRLOOM IS SAID TWICE NOW, and it used to be said once.
+
+       findPiece() grants it the instant the last toy piece is touched, which
+       is right — a piece is banked on contact so that quitting the lap you
+       spent fetching it still keeps it. But the announcement went with the
+       grant: a banner during the race, at 3.2 seconds, over a car the player is
+       still driving. Miss it and the game has told you nothing. The rarest
+       thing in it — the only reward stars cannot buy, and the end of a
+       48-piece collection spread across twelve tracks — could be handed over
+       while you were busy looking at the next corner.
+
+       So the first results card AFTER the set completes says it again, through
+       the `unlocked` list the card already draws. No new UI: HUD.drawResults
+       prints "UNLOCKED  <name>" for whatever is in here.
+
+       The marker lives in setsCompleted because that array is already
+       persisted AND already carried by save codes (SaveManager.js), so the
+       announcement happens exactly once per save and survives an export. */
+    const sets = this.save().collection.setsCompleted;
+    if (this.setComplete() && sets.indexOf('toy-set-shown') === -1) {
+      sets.push('toy-set-shown');
+      if (out.unlocked.indexOf('heirloom') === -1) out.unlocked.push('heirloom');
+    }
+
+    /* Did this race end the career? Only true on the one result card that
+       finishes it, never on a replay afterwards. */
+    out.careerComplete = !wasComplete && this.careerComplete();
+    out.careerPerfect  = this.careerPerfect();
+
     BR.SaveManager.save();
     return out;
   },
@@ -10297,8 +10583,14 @@ BR.ProgressionManager = {
         case 'clean':    ok = r.collisions < 4; break;
         case 'spotless': ok = r.position === 1 && r.collisions === 0; break;
         case 'drifter':  ok = r.driftSeconds >= 6; break;
+        /* The threshold is the EVENT'S, not this file's. It used to read
+           `event.id === 'rug-route-03' ? 27 : 29` — a track's measured lap time
+           hardcoded into the progression system by id, so tuning one event's
+           objective meant editing a system file, and deleting that event would
+           have left a dead branch behind. Content belongs in content
+           (16_Content_Pipeline.md). */
         case 'lap':      ok = r.bestLap !== null &&
-                              r.bestLap < (event.id === 'rug-route-03' ? 27 : 29); break;
+                              r.bestLap < (event.lapUnder || 29); break;
         case 'ttGold':   ok = r.time !== null && event.times &&
                               r.time <= event.times.gold; break;
         case 'ttPlat':   ok = r.time !== null && event.platinumTime &&
@@ -10616,17 +10908,52 @@ BR.Particles = {
     m.w = 3 + 3 * strength;
   },
 
+  /* ── WHAT EACH FLOOR THROWS UP ───────────────────────────────────────────
+     Every surface used to throw the same beige puff, because the colour was a
+     literal in the draw call — one sandy `rgba(214,198,170)` for sand, carpet,
+     floorboards, a puddle and a red sofa throw alike.
+
+     `rate` is emission INDEPENDENT OF SLIDING, which is the other half of it.
+     Sand sprays because you are driving on sand, not because you are sideways;
+     a plastic track piece throws almost nothing however hard you provoke it.
+     That makes the effect a reading of the ground rather than of the driver,
+     which is what 12_Art_Guide asks of it — effects are a gameplay signal, and
+     "what am I on" is the signal that matters here.
+
+     `rise` and `drag` are how it behaves once up: sand is heavy and drops back,
+     lint hangs, water spray is fast and short-lived. */
+  DUST_LOOK: {
+    rugRoad:    { col: '190,180,158', rate: 0.10, size: 0.85, rise: 0.9, life: 1.00 },
+    rugGrass:   { col: '150,170,120', rate: 0.30, size: 1.00, rise: 0.9, life: 1.05 },
+    hardwood:   { col: '188,168,138', rate: 0.05, size: 0.70, rise: 0.7, life: 0.80 },
+    blanket:    { col: '196,150,150', rate: 0.22, size: 1.10, rise: 0.7, life: 1.20 },
+    plastic:    { col: '205,205,210', rate: 0.02, size: 0.60, rise: 0.6, life: 0.70 },
+    paper:      { col: '224,216,196', rate: 0.14, size: 0.90, rise: 1.1, life: 1.10 },
+    bookCover:  { col: '186,170,150', rate: 0.06, size: 0.75, rise: 0.8, life: 0.85 },
+    sand:       { col: '214,198,170', rate: 0.55, size: 1.15, rise: 1.0, life: 0.95 },
+    packedSand: { col: '206,188,158', rate: 0.30, size: 1.00, rise: 0.9, life: 0.90 },
+    looseSand:  { col: '222,206,178', rate: 0.80, size: 1.30, rise: 1.1, life: 1.00 },
+    puddle:     { col: '206,226,236', rate: 0.70, size: 0.90, rise: 1.4, life: 0.55 },
+  },
+
+  lookFor(name) {
+    return this.DUST_LOOK[name] || this.DUST_LOOK.rugRoad;
+  },
+
   /* Dust puff — kicked up and away from the slide. */
-  addDust(x, y, vx, vy, strength) {
+  addDust(x, y, vx, vy, strength, look) {
+    const L = look || this.DUST_LOOK.rugRoad;
     const d = this.dust[this.dustIdx];
     this.dustIdx = (this.dustIdx + 1) % this.DUST_POOL;
     d.x = x; d.y = y; d.z = 1 + this.rnd() * 3;
     d.vx = vx + (this.rnd() - 0.5) * 40;
     d.vy = vy + (this.rnd() - 0.5) * 40;
-    d.vz = 18 + this.rnd() * 30;
-    d.max = 0.5 + this.rnd() * 0.35;
+    d.vz = (18 + this.rnd() * 30) * L.rise;
+    d.max = (0.5 + this.rnd() * 0.35) * L.life;
     d.life = d.max;
-    d.r = 3 + 6 * strength + this.rnd() * 3;
+    d.r = (3 + 6 * strength + this.rnd() * 3) * L.size;
+    d.col = L.col;
+    d.drag = 0.94;
   },
 
   update(dt) {
@@ -10642,7 +10969,8 @@ BR.Particles = {
       d.y += d.vy * dt;
       d.z += d.vz * dt;
       d.vz -= 40 * dt;
-      d.vx *= 0.94; d.vy *= 0.94;
+      const k = d.drag === undefined ? 0.94 : d.drag;
+      d.vx *= k; d.vy *= k;
       if (d.z < 0) { d.z = 0; d.vz = 0; }
     }
   },
@@ -10659,26 +10987,82 @@ BR.Particles = {
    * The price of living in the sim is that it must not touch the simulation's
    * randomness, which is what `rnd()` above is for.
    */
-  emitForVehicle(v, dt) {
+  emitForVehicle(v, dt, isPlayer) {
     if (!v.grounded) return;
 
     const speed = Math.hypot(v.vel.x, v.vel.y);
-    const strength = BR.M.clamp(
-      (v.slip - 0.10) / 0.55, 0, 1) * BR.M.clamp(speed / 120, 0, 1);
-    if (strength <= 0.02) return;
+    const fast = BR.M.clamp(speed / 120, 0, 1);
+    const strength = BR.M.clamp((v.slip - 0.10) / 0.55, 0, 1) * fast;
+    const L = this.lookFor(v.surface);
+    // Opponents emit, but thinner: eight cars at the player's rate would flush
+    // a 160-slot pool in one corner and the player's own trail would vanish.
+    const share = isPlayer === false ? 0.45 : 1;
 
-    // Two marks, one per rear wheel.
-    const c = Math.cos(v.heading), s = Math.sin(v.heading);
-    const back = -v.spec.length * 0.30;
-    const half = v.spec.width * 0.40;
-    for (let side = -1; side <= 1; side += 2) {
-      const ox = back * c - (half * side) * s;
-      const oy = back * s + (half * side) * c;
-      this.addMark(v.x + ox, v.y + oy, v.heading, strength);
+    /* Two kinds of dust, and keeping them apart is the point. SLIDING throws
+       it up whatever you are on; SPEED throws it up because of what you are on.
+       Sand sprays down a straight and a plastic track piece does not, so the
+       floor is legible from the trail without looking down. */
+    const ground = L.rate * fast * fast * share;
+    if (this.rnd() < ground * 0.9) {
+      this.addDust(v.x, v.y, -v.vel.x * 0.10, -v.vel.y * 0.10, 0.35 + 0.4 * fast, L);
     }
 
-    if (this.rnd() < strength * 0.9) {
-      this.addDust(v.x, v.y, -v.vel.x * 0.15, -v.vel.y * 0.15, strength);
+    if (strength <= 0.02) return;
+
+    /* Two marks, one per rear wheel — but NOT every tick.
+       Laying a pair per car per tick was affordable while only the humans did
+       it. With the whole field emitting, eight cars put 16 marks a tick into a
+       420-slot ring, which recycles the entire pool in under a second — so
+       trails would disappear faster than they were drawn, and the fix for
+       "rivals leave no marks" would have deleted the player's own.
+
+       At this rate a car at full speed lays a mark roughly every 17 units,
+       which is under its own length, so the trail still reads as continuous. */
+    if (this.rnd() < 0.34 * share) {
+      const c = Math.cos(v.heading), s = Math.sin(v.heading);
+      const back = -v.spec.length * 0.30;
+      const half = v.spec.width * 0.40;
+      for (let side = -1; side <= 1; side += 2) {
+        const ox = back * c - (half * side) * s;
+        const oy = back * s + (half * side) * c;
+        this.addMark(v.x + ox, v.y + oy, v.heading, strength);
+      }
+    }
+
+    if (this.rnd() < strength * 0.9 * share) {
+      this.addDust(v.x, v.y, -v.vel.x * 0.15, -v.vel.y * 0.15, strength, L);
+    }
+  },
+
+  /* ── landing ─────────────────────────────────────────────────────────────
+     A car dropping out of the air used to arrive in total silence, visually:
+     the shadow met the wheels and nothing happened. A ring of whatever the
+     floor is made of, thrown outward, is the cheapest way to say "that landed"
+     — and it reads at exactly the moment the player is looking, because they
+     have just been in the air wondering where they will come down. */
+  landing(v, force) {
+    const L = this.lookFor(v.surface);
+    const n = 3 + Math.round(4 * force);
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + this.rnd() * 0.6;
+      const sp = 40 + 90 * force * this.rnd();
+      this.addDust(v.x, v.y, Math.cos(a) * sp, Math.sin(a) * sp, 0.4 + 0.5 * force, L);
+    }
+  },
+
+  /* ── impact ──────────────────────────────────────────────────────────────
+     Thrown FORWARD of the contact and against the direction of travel, so it
+     reads as something coming off the car rather than a puff appearing beside
+     it. Uses the floor's own colour: a toy car hitting a skirting board does
+     not strike sparks, it scuffs whatever it is standing on. */
+  impact(v, severity) {
+    const L = this.lookFor(v.surface);
+    const n = 2 + Math.round(5 * severity);
+    for (let i = 0; i < n; i++) {
+      const a = this.rnd() * Math.PI * 2;
+      const sp = 60 + 140 * severity * this.rnd();
+      this.addDust(v.x, v.y, Math.cos(a) * sp - v.vel.x * 0.2,
+                   Math.sin(a) * sp - v.vel.y * 0.2, 0.5 + 0.5 * severity, L);
     }
   },
 };
@@ -11265,6 +11649,14 @@ BR.Renderer = {
 
     for (let i = 0; i < drawables.length; i++) {
       const d = drawables[i];
+      /* `collisionOnly` walls are a prop's octagon — drawProp draws the thing
+         itself, and drawing its collision shape too put a coloured fence round
+         every prop in the game. Skipped with `continue` and NOT by an extra
+         condition on the first branch: this is an if/else chain ending in "it
+         must be a vehicle", so a wall that fails the first test falls all the
+         way through and is drawn as a car with no `car` on it. */
+      if (d.wall && d.wall.collisionOnly) continue;
+
       if (d.wall)        this.drawWall(ctx, d.wall, arena.wallHeight, arena);
       else if (d.rail)   this.drawRailSegment(ctx, d.rail, d.seg);
       else if (d.prop)   this.drawProp(ctx, d.prop);
@@ -13326,6 +13718,22 @@ BR.Renderer = {
       pad:   this.CULL_PAD,
       on:    this.CULL,
     };
+
+    /* ── DETAIL FOR THE SIZE OF THE WINDOW ──────────────────────────────────
+       Everything below is drawn once PER VIEWPORT, so a four-player split pays
+       the whole frame four times. Measured on Shelf Run, the heaviest track:
+       12,210 operations a frame alone, and 38,800 in a four-way split — past
+       the point where a 2D canvas starts missing frames, while one player is
+       comfortably inside budget.
+
+       A quarter-size viewport cannot show quarter-size detail. The kerb
+       stitching is generated at a stride over the edge points, so doubling the
+       stride halves that geometry, and at 320x225 nobody can see the
+       difference — the blocks are already under two pixels each.
+
+       Deliberately a step rather than a curve: it must not change while you
+       drive, only when the layout does. */
+    this.lod = view.h < this.h * 0.7 ? 2 : 1;
   },
 
   // No depth test — see the note on `anyVisible`. In an axonometric projection
@@ -13538,7 +13946,9 @@ BR.Renderer = {
        count under this code's control: about sixty per edge rather than
        sixteen hundred, at a spacing chosen to look right rather than one that
        falls out of a dash length. */
-    const marks = function (pts, stride, frac, phase) {
+    const LOD = this.lod || 1;
+    const marks = function (pts, stride0, frac, phase) {
+      const stride = stride0 * LOD;      // coarser in a split-screen viewport
       const n = pts.length;
       const step = function (r) {
         const from = r ? r[0] : 0;
@@ -14466,9 +14876,21 @@ BR.Renderer = {
 
   // ── particles ────────────────────────────────────────────────────────────
 
+  /* CULLED ON THE POINT ALREADY PROJECTED.
+     Measured: this pass was 1,680 operations a frame on Shelf Run, 14% of the
+     whole frame, because every live mark in a 420-slot pool was drawn wherever
+     it was — and it is paid again per viewport, so a four-player split screen
+     paid it four times over.
+
+     A trail stretches out behind the car and round the track, so most of the
+     pool is off screen at any moment. The projection maths is cheap and the
+     canvas calls are not, so the test goes AFTER projecting and before the four
+     drawing calls, and costs nothing that was not already being spent. */
   drawMarks(ctx) {
     const Pj = BR.Projection;
     const marks = BR.Particles.marks;
+    const B = this.cullBounds;
+    const cull = B && B.on;
     ctx.lineCap = 'round';
     for (let i = 0; i < marks.length; i++) {
       const m = marks[i];
@@ -14478,6 +14900,13 @@ BR.Renderer = {
       const c = Math.cos(m.rot) * half, s = Math.sin(m.rot) * half;
       const p0 = Pj.project(m.x - c, m.y - s, 0);
       const p1 = Pj.project(m.x + c, m.y + s, 0);
+      if (cull) {
+        const pad = B.pad + 8;
+        if ((p0.sx < -B.halfW - pad && p1.sx < -B.halfW - pad) ||
+            (p0.sx > B.halfW + pad && p1.sx > B.halfW + pad) ||
+            (p0.sy < B.top - pad && p1.sy < B.top - pad) ||
+            (p0.sy > B.bot + pad && p1.sy > B.bot + pad)) continue;
+      }
       ctx.strokeStyle = 'rgba(30,24,20,' + (m.a * t).toFixed(3) + ')';
       ctx.lineWidth = m.w / 2;
       ctx.beginPath();
@@ -14490,12 +14919,21 @@ BR.Renderer = {
   drawDust(ctx) {
     const Pj = BR.Projection;
     const dust = BR.Particles.dust;
+    const B = this.cullBounds;
+    const cull = B && B.on;
     for (let i = 0; i < dust.length; i++) {
       const d = dust[i];
       if (d.life <= 0) continue;
       const t = d.life / d.max;
       const p = Pj.project(d.x, d.y, d.z);
-      ctx.fillStyle = 'rgba(214,198,170,' + (0.34 * t).toFixed(3) + ')';
+      if (cull) {
+        const pad = B.pad + d.r + 6;
+        if (p.sx < -B.halfW - pad || p.sx > B.halfW + pad ||
+            p.sy < B.top - pad || p.sy > B.bot + pad) continue;
+      }
+      // The colour comes from the FLOOR now, not from a literal. Sand, carpet
+      // lint, a red throw and water spray are not the same beige.
+      ctx.fillStyle = 'rgba(' + (d.col || '214,198,170') + ',' + (0.34 * t).toFixed(3) + ')';
       ctx.beginPath();
       ctx.arc(p.sx, p.sy, d.r * (1.4 - t * 0.4), 0, Math.PI * 2);
       ctx.fill();
@@ -14567,6 +15005,45 @@ BR.Renderer = {
     ctx.fillStyle = 'rgba(0,0,0,' +
       (0.42 * (1 - lift * 0.18) * Pj.shadowAlphaAt(anchor.depth)).toFixed(3) + ')';
     ctx.fill();
+
+    /* ── boost flame ────────────────────────────────────────────────────────
+       Boost is the most dramatic thing a car can do and it had NO
+       representation on the car at all: the meter drained, the camera punched
+       in, and the car itself looked identical. A rival boosting past you was
+       indistinguishable from a rival driving past you.
+
+       So this is drawn for EVERY car, unlike the meter ring below, which is the
+       player's own instrument and would be noise under eight of them. Knowing
+       that the car ahead just spent its boost is information you can act on.
+
+       Two tongues rather than one, at the rear corners where an exhaust would
+       be, flickering on a hash of the boost timer so it never sits still — and
+       squashed onto the ground plane by groundTilt like everything else, or it
+       would stand up off the deck and read as a flag. */
+    if (v.boosting) {
+      const c2 = Math.cos(heading), s2 = Math.sin(heading);
+      const back = -spec.length * 0.52, halfW = spec.width * 0.30;
+      // Flicker from the drain, so it is tied to the thing running out.
+      const fl = 0.72 + 0.28 * Math.sin((v.boostTime || 0) * 47);
+      for (let side = -1; side <= 1; side += 2) {
+        const bx = v.x + back * c2 - (halfW * side) * s2;
+        const by = v.y + back * s2 + (halfW * side) * c2;
+        const len = spec.length * (0.55 + 0.45 * fl);
+        const tipx = bx - c2 * len, tipy = by - s2 * len;
+        const b = PT(bx, by, ground + 2), t2 = PT(tipx, tipy, ground + 2);
+        const g = ctx.createLinearGradient(b.sx, b.sy, t2.sx, t2.sy);
+        g.addColorStop(0, 'rgba(255,236,170,' + (0.85 * fl).toFixed(2) + ')');
+        g.addColorStop(0.45, 'rgba(255,168,64,' + (0.55 * fl).toFixed(2) + ')');
+        g.addColorStop(1, 'rgba(255,110,40,0)');
+        ctx.strokeStyle = g;
+        ctx.lineWidth = Math.max(1.5, spec.width * 0.34 * shrinkK);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(b.sx, b.sy);
+        ctx.lineTo(t2.sx, t2.sy);
+        ctx.stroke();
+      }
+    }
 
     // ── boost ring, on the ground around the car (vehicle-attached meter).
     //    Drawn as an ellipse squashed by groundTilt so it sits ON the plane.
@@ -16134,6 +16611,11 @@ BR.HUD = {
 
   drawSoloControls(ctx, RM, w, h) {
     if (!RM || !RM.STATE) return;
+    /* Not while the first-run lessons are running. They occupy exactly the
+       same two seconds of countdown, and the leaflet's first card names the
+       steering control on a key cap of its own — two sets of key names in one
+       glance is how a screen stops being read at all. */
+    if (BR.Coach && BR.Coach.active) return;
 
     let a;
     if (RM.state === RM.STATE.COUNTDOWN) {
@@ -16252,13 +16734,30 @@ BR.HUD = {
     const P = BR.ProgressionManager;
     const unlocked = res && res.unlocked && res.unlocked.length ? res.unlocked : null;
 
+    /* ── THE END OF THE CAREER ──────────────────────────────────────────────
+       careerComplete(), careerPerfect() and careerState() were written, are
+       correct, and NOTHING DREW THEM. Racing all twenty-six events produced an
+       ordinary results card and the game never mentioned it again — a ladder
+       with an ending computed and no ending shown, which from the player's seat
+       is the same as not having one at all.
+
+       `res.careerComplete` is true on exactly the card that ends it, because
+       ProgressionManager compares against whether the career was already
+       complete BEFORE this race, so it fires once. `careerPerfect` is the harder
+       thing underneath — every event, every toy piece, every star — and may
+       arrive on that same card or a long time after it. */
+    const done = res && res.careerComplete;
+    const perfect = res && res.careerPerfect;
+    const endLines = done ? (perfect ? 2 : 1) : 0;
+
     const cardW = Math.min(470, w - 40);
     const rowH = 28;
     // Deep enough for a 28px headline AND the total/best line under it. At 96
     // the printed rule above the standings was drawn through the middle of
     // "TOTAL 1:11.40" — visible in a render, invisible in the code.
     const headH = 108 + (BR.Screens && BR.Screens.activeEvent ? 14 : 0);
-    const cardH = headH + list.length * rowH + (unlocked ? 24 : 0) + 62;
+    const cardH = headH + list.length * rowH + (unlocked ? 24 : 0) +
+                  endLines * 26 + 62;
     const x = (w - cardW) / 2, y = (h - cardH) / 2;
 
     ctx.fillStyle = 'rgba(10,8,7,0.76)';
@@ -16365,6 +16864,30 @@ BR.HUD = {
         x + cardW / 2, cy);
       ctx.restore();
       cy += 20;
+    }
+
+    /* ── the last thing that happens ────────────────────────────────────────
+       Drawn in the kit's own paper voice rather than as a special effect: this
+       game is a box of toys, and the end of it should read like the sticker on
+       the lid, not like a trophy cutscene. `perfect` gets its own second line
+       because finishing the ladder and emptying the box are different
+       achievements, and a player who has done both should be told so. */
+    if (done) {
+      cy += 6;
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.font = T.label(13, 800);
+      ctx.fillStyle = '#b8862c';
+      ctx.fillText('THAT IS EVERY EVENT IN THE BOX', x + cardW / 2, cy);
+      cy += 22;
+      if (perfect) {
+        ctx.font = T.label(11, 700);
+        ctx.fillStyle = '#1c6d52';
+        ctx.fillText('EVERY STAR, EVERY PIECE, NOTHING LEFT', x + cardW / 2, cy);
+        cy += 20;
+      }
+      ctx.restore();
     }
 
     // The personal best, stamped across the corner rather than squeezed into
@@ -16855,6 +17378,606 @@ BR.CornerHint = {
   },
 };
 
+/* ==================== src/ui/Coach.js ==================== */
+/* =============================================================================
+   COACH — the first race, with somebody sitting next to you.
+   =============================================================================
+   A first-time player used to press RACE and be dropped onto the rug knowing
+   nothing. The game has drifting, a drift charge, a boost meter with a
+   threshold, surfaces that behave differently, hidden toy pieces, three stars
+   an event and a star gate across 26 of them — and the only thing it had ever
+   said out loud was a strip of tape with the key bindings on it, which fades
+   out 2.2 seconds after the lights go green.
+
+   ── WHY THIS IS NOT A SCREEN OF TEXT ──────────────────────────────────────
+   11_UI.md has said since its first draft that teaching here is diegetic and
+   that TRACK 1 IS THE TUTORIAL. So this is not a tutorial mode, a sandbox, or
+   a wall of instructions in front of the RACE button. It is the real Rookie
+   Shakedown — the real event, the real opponents, the real stars — with a
+   printed leaflet that turns a page as each thing becomes relevant.
+
+   The rule that constrains every line below is also 11_UI.md's, and it is
+   older than this file:
+
+       A PLAYER WHO IGNORES EVERY PROMPT MUST STILL BE ABLE TO FINISH THE RACE.
+
+   Nothing here gates anything. Nothing pauses the race, nothing waits for a
+   correct input, nothing is drawn where the car is about to be. Every lesson
+   carries a PATIENCE: if the player has not done the thing by then, the coach
+   moves on without mentioning it. A tutorial that nags is worse than no
+   tutorial, because it teaches that the game will not shut up.
+
+   ── THE CORNER PROMPT COMES FROM THE TRACK, NOT FROM A TIMER ──────────────
+   "Drift here" on a stopwatch would be wrong on the first corner the player
+   arrives at early or late, and would be a second copy of the track's corner
+   data — the exact failure CornerHint.js exists to avoid. So the drift lesson
+   asks CornerHint.findCorner() for the next real bend on the racing line the
+   AI already drives, and appears when one is genuinely coming. Move the
+   waypoints and the prompt moves with them.
+
+   ── IT DOES NOT TOUCH THE SIMULATION ──────────────────────────────────────
+   update() reads the vehicle and the race manager and writes nothing but its
+   own state. No physics, no AI, no difficulty, no target time. All 26 events
+   still calibrate at 0.00 with this file loaded, which is the only claim that
+   matters about a file that sits this close to a race.
+   ========================================================================== */
+
+window.BR = window.BR || {};
+
+BR.Coach = {
+
+  /* ── the flag, and why it lives in SETTINGS ───────────────────────────────
+     `settings.taught`, not `progression` and not `state`.
+
+     SaveManager draws one line down the middle of a save and draws it twice:
+     reset() keeps settings and drops progress, and importCode() keeps THIS
+     DEVICE's settings and takes the code's progress. Both say the same thing —
+     progress belongs to the player, settings belong to the seat.
+
+     Having been shown how to drive belongs to the seat. A player who wipes
+     their stars to start the ladder again is not a person who has forgotten
+     what the drift button is, and somebody who pastes a save code into a new
+     browser has certainly played before. Both of those would be handed the
+     first-run flow again if this lived with progress, which is precisely the
+     "never appear again once done" the whole feature is for.
+
+     And because it is a setting rather than a trophy, undoing it is allowed:
+     SHOW THE LESSONS AGAIN sits in Settings, next to the other things about
+     how this seat is set up. */
+  taught() {
+    const s = BR.SaveManager.get().settings;
+    return !!s.taught;
+  },
+
+  markTaught() {
+    BR.SaveManager.get().settings.taught = true;
+    BR.SaveManager.save();
+  },
+
+  /* ── live state ───────────────────────────────────────────────────────────
+     `cur` is the lesson being shown, or -1 between them. NOT a queue cursor —
+     see the scan in update() and the note above it. */
+  active: false,
+  cur: -1,
+  seen: {},        // id -> it has had its turn, whether or not it was answered
+  count: 0,
+  stepNo: 1,       // the leaflet's step number, for the "3 / 6" in the corner
+  showT: -1,       // seconds the current lesson has been on screen, -1 = none
+  doneT: -1,       // seconds since it was satisfied, -1 = not yet
+  gapT: 0,         // breathing room between two cards
+  wpHint: 0,       // last nearest-waypoint answer, for the corner lookahead
+  offRoadT: 0,     // how long the car has been off the road, for the surface beat
+
+  ACK: 1.5,        // how long GOT IT stays up before the page turns
+  GAP: 0.7,        // blank pause between cards
+  FADE: 0.28,
+
+  /* 11_UI.md: TRACK 1 IS THE TUTORIAL. Said once, here, rather than at each of
+     the two buttons that start it — the welcome card and SHOW THE LESSONS
+     AGAIN in Settings must never be able to disagree about which event teaches,
+     and the lessons below are written about this rug. */
+  EVENT_ID: 'rug-route-01',
+
+  /** Start the guided event. The only way in, from either button. */
+  begin() {
+    this.active = true;
+    this.cur = -1; this.seen = {}; this.count = 0; this.stepNo = 1;
+    this.showT = -1; this.doneT = -1; this.gapT = 0;
+    this.offRoadT = 0; this.wpHint = 0;
+    this.markTaught();
+    /* One seat. Two people on a sofa do not need to be told what the drift
+       button is one card at a time, and an exhibition race awards none of the
+       stars the last lesson is about. */
+    if (BR.Game) BR.Game.players = 1;
+    const ev = BR.eventById(this.EVENT_ID);
+    if (ev && BR.Game) BR.Game.startEvent(ev);
+  },
+
+  /* Player asked for it to stop, from the card or from the pause menu.
+
+     NO TOAST. Screens.say puts a message on the menu layer, and Screens.draw
+     returns before drawing it while a race is being driven — so the note would
+     sit unrendered and then appear, stale, on whatever screen the player
+     reached next. The card vanishing is the feedback; the sound is the
+     acknowledgement. */
+  skip() {
+    this.active = false;
+    this.markTaught();
+    BR.Audio.checkpoint();
+  },
+
+  finish() { this.active = false; },
+
+  /* ── the verbs, in three vocabularies ─────────────────────────────────────
+     A tutorial that only knows the keyboard is wrong on a phone, and telling a
+     phone to press SHIFT is worse than saying nothing at all — the same
+     conclusion HUD.drawSoloControls reached about the tape strip.
+
+     These deliberately do NOT come from Input.LABELS. That is one flat line
+     built for a strip of tape ("← →  or  A D   ·   SPACE drift   ·   SHIFT
+     boost"), and what a sentence needs is the single word, declined into the
+     sentence. If a binding changes, this table changes with it — which is why
+     it is one table and not six string literals scattered through the lessons
+     below. */
+  VERB: {
+    key:   { steer: '← →  or  A D', drift: 'SPACE', boost: 'SHIFT', pause: 'ESC' },
+    pad:   { steer: 'the stick',    drift: 'A',     boost: 'X',     pause: 'START' },
+    touch: { steer: '◀  ▶',         drift: 'DRIFT', boost: 'BOOST', pause: 'II' },
+  },
+
+  /** Which vocabulary this player is holding, decided the same way the HUD
+      decides which control line to draw. */
+  dialect() {
+    if (BR.Touch && BR.Touch.capable) return this.VERB.touch;
+    if (BR.Input && BR.Input.padFor && BR.Input.padFor(0)) return this.VERB.pad;
+    return this.VERB.key;
+  },
+
+  /* ── the lessons ──────────────────────────────────────────────────────────
+     In the order the rug hands them to you, which is the order 02_Mechanics.md
+     lists the verbs in and the order 01_Game_Loop.md's core loop needs them:
+     steer, drift, spend the drift, stay on the road, look for the hidden
+     things, and only then what any of it is worth.
+
+     Each lesson is:
+       ready    may it start yet — a question about the world, not the clock
+       needs    the id of a lesson that must have had its turn first
+       done     has the player DONE it (null = there is nothing to do)
+       patience seconds it is allowed to sit unanswered before giving up
+       linger   seconds an informational card stays up
+
+     THE ORDER IS A PRIORITY, NOT A QUEUE, and that distinction was bought the
+     hard way. Logging a full guided lap against the technician AI showed the
+     surface lesson sitting at the head of the line for forty-five seconds
+     waiting for a mistake that driver never makes — and because the lessons
+     behind it could not start until it gave up, TOY PIECES AND STARS WERE
+     NEVER TAUGHT AT ALL. The two beats that explain the whole progression
+     model were blocked by an optional one about the carpet. update() now takes
+     the first lesson that is ready rather than the next one in the line, so a
+     lesson that is not relevant yet costs nothing and is picked up the moment
+     it becomes relevant.
+
+     Note what is NOT taught: items (the Shakedown has none, and a control for
+     a thing that cannot happen teaches nothing), jumps (there are no ramps on
+     the rug), split screen and time trials (both are menu choices this player
+     has not made yet). Every lesson here is about something the player will
+     meet inside the next ninety seconds. */
+  LESSONS: [
+    {
+      id: 'steer',
+      head: 'IT DRIVES ITSELF',
+      body: 'The throttle is automatic. All you do is point it.',
+      chip: function (V) { return V.steer; },
+      /* Written as "pause with X" rather than "X pauses", which reads as a
+         sentence in all three vocabularies — the touch one begins with the
+         pause glyph, and "II pauses, any time" is not a sentence. */
+      foot: function (V) {
+        return 'Pause any time with ' + V.pause + ' — even mid-air.';
+      },
+      ready: function () { return true; },
+      // Not "the countdown ended" — a beat of actually driving, so the first
+      // card is still there when the car first moves and the words mean
+      // something.
+      done: function (c, g, v, RM) {
+        return RM.state === RM.STATE.RACING && RM.clock > 1.6;
+      },
+      patience: 14,
+    },
+
+    {
+      id: 'drift',
+      /* It ARRIVES at a corner and it STAYS UP for as long as the player has
+         not managed one, which is up to twenty seconds and several bends. The
+         first head read "HERE COMES A CORNER", which is true for one second
+         and a lie for the other nineteen — a render at 37 seconds had it still
+         announcing a corner two corners later. The card has to be true for the
+         whole time it is on screen, not only for the moment it appears. */
+      head: 'CORNERS WANT A DRIFT',
+      body: 'Hold it as you turn in. Tighter line, and it charges the meter.',
+      chip: function (V) { return 'HOLD  ' + V.drift; },
+      /* Asked of the racing line, not of a stopwatch: the prompt arrives when
+         a real bend is 600-odd units away, wherever the player happens to be
+         by then. A player who has already spun, or is miles back, still gets
+         it on their own next corner. */
+      ready: function (c, g, v, RM) {
+        if (RM.state !== RM.STATE.RACING) return false;
+        if (Math.hypot(v.vel.x, v.vel.y) < 90) return false;
+        const cr = c.cornerAhead(g, v);
+        return !!(cr && cr.distance < 620 && cr.severity > 0.30);
+      },
+      /* driftCharge is the honest test — it only rises while the car is
+         actually sliding past driftMinAngle above driftMinSpeed
+         (VehicleController). Holding the button in a straight line does not
+         count, which is the whole point of the lesson. */
+      done: function (c, g, v) { return v.driftCharge > 0.28; },
+      patience: 20,
+    },
+
+    /* The copy says DRIFTS AND ARROWS, not "that slide was fuel", and the
+       difference is not styling. The meter fills from boost pads too — the car
+       starts a Rug Route race parked on one — so a player who has not managed
+       a drift yet can still arrive here with a green bar, and a card that
+       congratulates them on a slide they never made is a card that teaches
+       them the wrong cause. It also gets the pads taught for free. */
+    {
+      id: 'boost',
+      head: 'THE METER IS UP',
+      body: 'Drifts fill it, and so do the arrows painted on the road.',
+      chip: function (V) { return 'PRESS  ' + V.boost; },
+      needs: 'drift',
+      ready: function (c, g, v) {
+        return v.boostMeter >= BR.PHYSICS.boostMinToFire;
+      },
+      done: function (c, g, v) { return !!v.boosting; },
+      patience: 22,
+    },
+
+    /* The one lesson the player has to earn by making the mistake. It is only
+       offered once the car has actually been off the road for a moment, which
+       is when the words mean something — and if nobody ever leaves the tarmac,
+       nobody is ever told, because they did not need telling. */
+    {
+      id: 'rug',
+      head: 'THE RUG IS SLOW GOING',
+      body: 'Pile drags. The road is quicker even when it is longer.',
+      ready: function (c) { return c.offRoadT > 0.45; },
+      done: null,
+      linger: 4.5,
+    },
+
+    /* The two that explain what a race is FOR, held back by the clock rather
+       than by the lessons in front of them. Nothing about the world says when
+       is the right moment to mention toy pieces, and a lesson with no ready
+       condition would fire during the countdown. */
+    {
+      id: 'pieces',
+      head: 'THINGS ARE HIDDEN OUT HERE',
+      body: 'Four toy pieces on this rug, off the fast line. They unlock what medals cannot.',
+      ready: function (c, g, v, RM) {
+        return RM.state === RM.STATE.RACING && RM.clock > 26;
+      },
+      done: null,
+      linger: 5,
+    },
+
+    {
+      id: 'stars',
+      head: 'THREE STARS AN EVENT',
+      body: 'Finish, podium, stay tidy. Stars open the rest of the box.',
+      ready: function (c, g, v, RM) {
+        return RM.state === RM.STATE.RACING &&
+               (RM.player().lap >= RM.laps - 1 || RM.clock > 55);
+      },
+      done: null,
+      linger: 5.5,
+    },
+  ],
+
+  /** The next real bend on the racing line, or null on a straight. */
+  cornerAhead(game, v) {
+    const line = game.arena && game.arena.racingLine;
+    if (!line || !line.length || !BR.CornerHint) return null;
+    this.wpHint = BR.CornerHint.nearestWaypoint(line, v, this.wpHint);
+    return BR.CornerHint.findCorner(line, this.wpHint);
+  },
+
+  /* ── update ───────────────────────────────────────────────────────────────
+     Called once per RENDERED frame from main.frame — never from inside the
+     fixed step. Nothing here feeds the simulation, and a lesson advancing
+     twice on a 144Hz machine would be a UI bug, not a physics one. */
+  update(game, dt) {
+    if (!this.active) return;
+    /* Split screen has no seat to teach: four cards, or one card that belongs
+       to whichever quarter of the screen it happens to sit on. It is also an
+       exhibition with no stars, so half the lessons would be lies. */
+    if (!game || game.players !== 1) { this.finish(); return; }
+    if (game.paused) return;
+
+    const RM = BR.RaceManager;
+    const v = game.vehicle;
+    if (!RM || !RM.racers || !v) return;
+    /* Leaving the race ENDS the lessons rather than pausing them. QUIT TO
+       EVENTS mid-lesson used to leave the coach armed, so the next event the
+       player chose — a sandbox, a time trial — was narrated by cards written
+       about a rug. The same reason the event id is checked: these six lessons
+       describe one track, and SHOW THE LESSONS AGAIN starts that track. */
+    if (BR.Screens && BR.Screens.state !== BR.Screens.RACE) { this.finish(); return; }
+    if (!game.event || game.event.id !== this.EVENT_ID) { this.finish(); return; }
+    // The scorecard owns the screen once the race is over.
+    if (RM.state === RM.STATE.FINISHED) { this.finish(); return; }
+
+    /* Off-road time, for the surface lesson. Kept here rather than inside the
+       lesson so it accumulates while the earlier ones are still running.
+
+       Asked of the TRACK — `offSurface` is what TrackManager reports beyond
+       the kerbs — rather than compared against the string 'rugRoad'. The one
+       hard-coded surface name in a UI file is one that goes stale the first
+       time a world is added, which is exactly the tax 16_Content_Pipeline.md
+       is written to avoid. */
+    const off = game.arena && game.arena.offSurface;
+    this.offRoadT = (off && v.surface === off) ? this.offRoadT + dt : 0;
+
+    // ── a lesson is on screen ────────────────────────────────────────────
+    if (this.cur >= 0) {
+      const L = this.LESSONS[this.cur];
+      this.showT += dt;
+
+      if (this.doneT >= 0) {
+        this.doneT += dt;
+        if (this.doneT > this.ACK) this.retire();
+        return;
+      }
+
+      if (L.done) {
+        if (L.done(this, game, v, RM)) {
+          this.doneT = 0;
+          BR.Audio.checkpoint();
+        } else if (this.showT > L.patience) {
+          // Given up on quietly. No "you failed", no repeat — see the header.
+          this.retire();
+        }
+      } else if (this.showT > (L.linger || 4)) {
+        this.retire();
+      }
+      return;
+    }
+
+    if (this.gapT > 0) { this.gapT -= dt; return; }
+
+    /* ── choosing the next one ────────────────────────────────────────────
+       THE FIRST LESSON THAT IS READY, not the next one in the list. List order
+       is the tie-break — a corner and a full boost meter arriving together
+       teach the drift first — but a lesson whose moment has not come does not
+       hold up the ones behind it. `needs` is the only ordering that is
+       enforced, and it is used once: nothing says "spend the boost" before the
+       player has been told where boost comes from. */
+    for (let i = 0; i < this.LESSONS.length; i++) {
+      const L = this.LESSONS[i];
+      if (this.seen[L.id]) continue;
+      if (L.needs && !this.seen[L.needs]) continue;
+      if (!L.ready(this, game, v, RM)) continue;
+      this.cur = i;
+      this.showT = 0;
+      this.doneT = -1;
+      this.stepNo = this.count + 1;
+      return;
+    }
+  },
+
+  /** This lesson has had its turn, answered or not. */
+  retire() {
+    const L = this.LESSONS[this.cur];
+    if (L && !this.seen[L.id]) { this.seen[L.id] = true; this.count++; }
+    this.cur = -1;
+    this.showT = -1; this.doneT = -1;
+    this.gapT = this.GAP;
+    if (this.count >= this.LESSONS.length) this.finish();
+  },
+
+  /* ── draw ─────────────────────────────────────────────────────────────────
+     THE LEAFLET THAT CAME IN THE BOX. Printed stock with ink on it — the same
+     card the event rows and the scorecard are made of (11_UI.md, four
+     materials and nothing else) — with the control named on a moulded key cap,
+     because a key is a piece of plastic and a sentence is not.
+
+     ── WHERE IT SITS, AND WHY NOT LOWER ─────────────────────────────────────
+     Top centre, immediately under the clock. Everything else is spoken for:
+     the car and the road it is about to cover are the middle and lower screen,
+     the corner arrow is bottom-centre under the car by design, the speed and
+     boost block is bottom-left, the map is bottom-right, and the control tape
+     is on the bottom edge. Under the clock is the only band on this screen
+     that is neither a readout nor the racing line.
+
+     It is drawn ONCE, in screen space, not per viewport — there is only ever
+     one seat being taught. It reads the same scale factor the HUD uses so the
+     gap under the clock is the same gap at every size.
+     ────────────────────────────────────────────────────────────────────── */
+  draw(ctx, w, h, dt) {
+    if (!this.active) return;
+    const G = BR.Game;
+    if (!G || G.players !== 1) return;
+    // The pause card owns the screen, and it carries its own SKIP control.
+    if (G.paused) return;
+    if (BR.Screens && BR.Screens.state !== BR.Screens.RACE) return;
+    const RM = BR.RaceManager;
+    if (!RM || RM.state === RM.STATE.FINISHED) return;
+    if (this.cur < 0 || this.showT < 0) return;
+
+    const L = this.LESSONS[this.cur];
+    if (!L) return;
+
+    const T = BR.Toy;
+    const V = this.dialect();
+
+    // Fade in, and fade out under the acknowledgement so the page turn reads
+    // as a page turn rather than a cut.
+    let a = Math.min(1, this.showT / this.FADE);
+    if (this.doneT >= 0) {
+      a *= Math.min(1, Math.max(0, (this.ACK - this.doneT) / this.FADE));
+    }
+    if (a <= 0.01) return;
+
+    /* Same clamp HUD.draw uses, so the card lands the same distance under the
+       clock whatever the window is doing. */
+    const k = Math.min(1, Math.max(0.55, w / 900));
+    const cw = Math.min(452, w - 28);
+    const x = Math.round((w - cw) / 2);
+
+    let y = Math.round(60 * k + 12);
+    /* Under the CLOCK on a wide screen, and under the position and lap plates
+       as well on a narrow one. The card is centred and capped at 452, so on a
+       phone it is nearly the full width and its top-left corner reaches back
+       into the top-left block — a render at 375 had it sitting across the
+       bottom of LAP 1/3. Both bounds come from the rectangles HUD.drawRaceState
+       actually draws: the clock ends at 60, the plates at 94 and 268. */
+    if (x < 268 * k) y = Math.max(y, Math.round(94 * k + 8));
+    /* A phone puts its pause button in the top right corner and gives it a
+       generous hit box, and on a narrow screen the card reaches it. Read the
+       rect Touch actually laid out this frame rather than recomputing its
+       arithmetic here — Touch.draw runs immediately before this. */
+    if (BR.Touch && BR.Touch.capable && BR.Touch.driving()) {
+      const R = BR.Touch.regions || [];
+      for (let i = 0; i < R.length; i++) {
+        if (R[i].k !== 'pause') continue;
+        const bot = R[i].y + R[i].r * BR.Touch.SLOP + 8;
+        if (bot > y) y = Math.round(bot);
+      }
+    }
+    // An item race puts a slot at top centre. The Shakedown has no items, but
+    // SHOW THE LESSONS AGAIN can be pressed with any event queued behind it.
+    if (G.items && y < 146) y = 146;
+
+    const hasChip = !!L.chip;
+    const hasFoot = !!L.foot;
+
+    /* ── the body WRAPS, it does not condense ─────────────────────────────
+       fillText's maxWidth squeezes the glyphs instead of clipping them, which
+       11_UI.md has already ruled on once for the event rows: a line squeezed
+       to fit is present and unreadable. The longest lesson is 78 characters
+       and a phone's card is 347 wide, so on a phone this is not an edge case,
+       it is every card. The card grows a line instead. */
+    ctx.save();
+    ctx.font = T.label(12, 600);
+    const bodyLines = this.wrap(ctx, L.body, cw - 32, 3);
+    ctx.restore();
+    const ch = 62 + (bodyLines.length - 1) * 16 +
+               (hasChip ? 30 : 0) + (hasFoot ? 16 : 0);
+
+    ctx.save();
+    ctx.globalAlpha = a;
+
+    T.card(ctx, x, y, cw, ch, 8, '#e8ddc3', 'paper');
+
+    // The leaflet's step number, the way an assembly sheet counts its steps.
+    ctx.save();
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'top';
+    ctx.font = T.label(10, 800);
+    ctx.fillStyle = 'rgba(44,34,25,0.45)';
+    ctx.fillText(this.stepNo + ' / ' + this.LESSONS.length, x + cw - 14, y + 12);
+    ctx.restore();
+
+    ctx.save();
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.font = T.label(15, 800);
+    ctx.fillStyle = T.INK;
+    ctx.fillText(L.head, x + 16, y + 12, cw - 76);
+
+    ctx.font = T.label(12, 600);
+    ctx.fillStyle = 'rgba(44,34,25,0.74)';
+    for (let i = 0; i < bodyLines.length; i++) {
+      ctx.fillText(bodyLines[i], x + 16, y + 34 + i * 16);
+    }
+    ctx.restore();
+
+    let by = y + 56 + (bodyLines.length - 1) * 16;
+    if (hasChip) {
+      this.cap(ctx, x + 16, by, L.chip(V));
+      by += 30;
+    }
+    if (hasFoot) {
+      ctx.save();
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.font = T.label(10, 600);
+      ctx.fillStyle = 'rgba(44,34,25,0.52)';
+      ctx.fillText(L.foot(V), x + 16, by, cw - 32);
+      ctx.restore();
+    }
+
+    /* GOT IT, as a rubber stamp across the corner of the leaflet — the same
+       stamp NEW BEST TIME uses, because it means the same kind of thing. It
+       tilts, and it is allowed to, because it carries no hit region. */
+    if (this.doneT >= 0) {
+      T.stamp(ctx, 'GOT IT', x + cw - 62, y + ch - 20, '#2e7d52', -0.10);
+    }
+
+    ctx.restore();
+
+    /* ── the way out ──────────────────────────────────────────────────────
+       A real button with a real region, registered through Screens.button so
+       it uses the same hit test, the same hover highlight and the same
+       plastic as every other control in the game.
+
+       Screens.regions is cleared once per frame in main.frame and nothing
+       else pushes to it while racing, so this is index 0 and cannot disturb
+       any other screen's focus order. It is a POINTER and THUMB control:
+       Screens' key handler deliberately ignores the keyboard while a race is
+       being driven, so a keyboard or pad player skips from the pause menu,
+       which carries the same action while these are running. Both routes
+       exist because neither covers everybody. */
+    if (BR.Screens) {
+      ctx.save();
+      ctx.globalAlpha = a;
+      BR.Screens.button(ctx, x + cw - 74, y + ch + 8, 74, 24, 'SKIP',
+                        'coachSkip', null, { small: true });
+      ctx.restore();
+    }
+  },
+
+  /**
+   * Greedy word wrap against the CURRENT font, capped at `maxLines`. The last
+   * line keeps whatever is left rather than being truncated — no lesson is
+   * long enough to reach the cap, and a card that silently loses its last four
+   * words would be worse than one that runs a line long.
+   */
+  wrap(ctx, text, maxW, maxLines) {
+    const words = String(text).split(' ');
+    const lines = [];
+    let line = '';
+    for (let i = 0; i < words.length; i++) {
+      const next = line ? line + ' ' + words[i] : words[i];
+      if (line && ctx.measureText(next).width > maxW &&
+          lines.length < maxLines - 1) {
+        lines.push(line);
+        line = words[i];
+      } else {
+        line = next;
+      }
+    }
+    lines.push(line);
+    return lines;
+  },
+
+  /* A moulded key cap with the control's name on it. Cream on dark plastic —
+     one of the two pairings 11_UI.md allows, and the right one here because
+     the word is a piece of the toy rather than something printed on paper. */
+  cap(ctx, x, y, text) {
+    const T = BR.Toy;
+    ctx.save();
+    ctx.font = T.label(12, 800);
+    const tw = ctx.measureText(text).width;
+    T.plate(ctx, x, y, tw + 26, 24, 6, T.SHELL);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    T.moulded(ctx, text, x + 13, y + 13, '#f4ecd8');
+    ctx.restore();
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+  },
+};
+
 /* ==================== src/ui/Screens.js ==================== */
 /* =============================================================================
    SCREENS — menu, event map, garage.
@@ -16876,6 +17999,13 @@ window.BR = window.BR || {};
 BR.Screens = {
 
   MENU: 'menu', EVENTS: 'events', GARAGE: 'garage', RACE: 'race',
+
+  /* WELCOME is the first thing a brand new save sees, instead of the menu.
+     SETTINGS and CREDITS are the two screens 11_UI.md has listed under "Main
+     menu" since the first draft and which never got built — the settings that
+     existed were reachable only from the pause card, mid-race, or from a key
+     nobody was told about. */
+  WELCOME: 'welcome', SETTINGS: 'settings', CREDITS: 'credits',
 
   /* Say what changes, not how hard it is. "Medium" tells a player nothing. */
   DIFF_BLURB: {
@@ -17017,7 +18147,16 @@ BR.Screens = {
      stranded on a screen with no way out. */
   back() {
     if (this.state === this.RACE && BR.Game.paused) { BR.Game.paused = false; return; }
-    if (this.state === this.EVENTS || this.state === this.GARAGE) {
+    /* Escaping off the welcome card is declining it, not dodging it. If it
+       came back on the next boot the flag would mean nothing, and the one
+       thing this screen must never be is a thing you cannot get rid of. */
+    if (this.state === this.WELCOME) {
+      if (BR.Coach) BR.Coach.markTaught();
+      this.set(this.MENU);
+      return;
+    }
+    if (this.state === this.EVENTS || this.state === this.GARAGE ||
+        this.state === this.SETTINGS || this.state === this.CREDITS) {
       this.set(this.MENU);
     }
   },
@@ -17176,6 +18315,16 @@ BR.Screens = {
          one-press button that eats a save is not acceptable. */
       case 'saveExport': this.openExport(); break;
       case 'saveImport': this.openImport(); break;
+
+      /* ── the first-run lessons (src/ui/Coach.js) ─────────────────────────
+         Three actions and no fourth: take them, decline them, stop them
+         halfway. Coach.begin() picks the event itself, so the welcome card
+         and SHOW THE LESSONS AGAIN cannot drift apart about which track
+         teaches. All three mark the seat as taught — declining is an answer,
+         and a screen that reappears after you have said no is a bug. */
+      case 'coachStart':   BR.Coach.begin(); break;
+      case 'coachDecline': BR.Coach.markTaught(); this.set(this.MENU); break;
+      case 'coachSkip':    BR.Coach.skip(); break;
 
       case 'goto':    this.set(r.value); break;
       case 'start':   G.startEvent(BR.eventById(r.value)); break;
@@ -17547,9 +18696,12 @@ BR.Screens = {
     ctx.fillStyle = 'rgba(14,12,10,0.74)';
     ctx.fillRect(0, 0, w, h);
 
-    if (this.state === this.MENU)   this.drawMenu(ctx, w, h);
-    if (this.state === this.EVENTS) this.drawEvents(ctx, w, h);
-    if (this.state === this.GARAGE) this.drawGarage(ctx, w, h);
+    if (this.state === this.MENU)    this.drawMenu(ctx, w, h);
+    if (this.state === this.EVENTS)  this.drawEvents(ctx, w, h);
+    if (this.state === this.GARAGE)  this.drawGarage(ctx, w, h);
+    if (this.state === this.WELCOME) this.drawWelcome(ctx, w, h);
+    if (this.state === this.SETTINGS) this.drawSettings(ctx, w, h);
+    if (this.state === this.CREDITS) this.drawCredits(ctx, w, h);
 
     // A note stuck on with tape, which is what a transient message is.
     if (this.toastTime > 0) {
@@ -17633,7 +18785,13 @@ BR.Screens = {
   drawPause(ctx, w, h) {
     const T = BR.Toy;
     const cardW = Math.min(380, w - 48);
-    const cardH = 372;
+    /* The lessons row only exists while they are running, which is a first-run
+       state and nothing else. It is the KEYBOARD AND PAD route out of them —
+       the card's own SKIP button is a pointer and thumb target, and Screens'
+       key handler deliberately ignores the keyboard while a race is being
+       driven, so without this a pad player could not stop them at all. */
+    const coaching = !!(BR.Coach && BR.Coach.active);
+    const cardH = 372 + (coaching ? 46 : 0);
     /* Centred, but never above the top edge. On a screen shorter than the card
        — a phone in landscape is 375 — centring puts RESUME off the top, and
        RESUME is the one control here that has to be reachable. Pushed down, the
@@ -17655,6 +18813,11 @@ BR.Screens = {
     this.button(ctx, bx, by, bw, 36, 'RESTART RACE', 'restart', null);
     by += 46;
     this.button(ctx, bx, by, bw, 36, 'QUIT TO EVENTS', 'quitToEvents', null);
+
+    if (coaching) {
+      by += 46;
+      this.button(ctx, bx, by, bw, 36, 'SKIP THE LESSONS', 'coachSkip', null);
+    }
 
     // ── settings worth reaching mid-race ─────────────────────────────────
     by += 54;
@@ -17773,9 +18936,41 @@ BR.Screens = {
        Pre-existing, and the same shape of fault as the difficulty overlap
        already recorded here: a layout that mixes a proportional anchor with a
        fixed block cannot hold as the screen shortens. Above about 620 tall
-       nothing moves. */
+       nothing moves.
+
+       ── THE WHOLE COLUMN IS SOLVED BEFORE ANYTHING IS DRAWN ────────────────
+       It used to run the other way: `top` was chosen from the height, and the
+       stack was then wedged in underneath whatever was left. That cannot work,
+       because the stack is the part with a hard minimum — five controls and
+       two captions that physically cannot be closer together — and the header
+       is the part that can move. Solving the stack first and hanging the
+       header off it is why 812x375 now fits with nothing overlapping and
+       nothing sliced, and why 1280x800 is unmoved to the pixel. */
     const HEADER_H = 110;                  // subtitle, tally and hint below it
-    const top = Math.min(h * 0.22, Math.max(8, h * 0.44 - 8 - HEADER_H));
+    const ROW_H = 26;                      // the SETTINGS / CREDITS row
+    const BOT_PAD = 8;
+
+    /* Gaps measured from one control's TOP to the next one's. The minimum for
+       each is the height of the control it steps over, plus room for the
+       moulded caption that sits above the next one where there is one — a
+       caption drawn into the bevel of the button above it is the thing a
+       render at 812x375 caught. */
+    const wantG = [58, 58, 62, 46];
+    const minG  = [50, 60, 52, 40];
+    let wantSum = 0, minSum = 0;
+    for (let i = 0; i < 4; i++) { wantSum += wantG[i]; minSum += minG[i]; }
+
+    /* Anchored at 0.44 of the height, but never lower than the point where the
+       stack stops fitting above the bottom edge. */
+    let by = Math.min(h * 0.44, h - (minSum + ROW_H + BOT_PAD));
+    if (by < HEADER_H + 16) by = HEADER_H + 16;
+    const top = Math.min(h * 0.22, Math.max(8, by - 8 - HEADER_H));
+
+    const budget = h - BOT_PAD - ROW_H - by;
+    const s = BR.M.clamp((budget - minSum) / (wantSum - minSum), 0, 1);
+    const g = [];
+    for (let i = 0; i < 4; i++) g.push(minG[i] + (wantG[i] - minG[i]) * s);
+    const gButton = g[0], gButton2 = g[1], gSection = g[2];
 
     /* THE LOGO IS THE BOX FRONT. A wordmark printed on a sticker, tilted,
        because nothing a child owns is aligned.
@@ -17840,27 +19035,34 @@ BR.Screens = {
        the scale is 1 and the layout is pixel-for-pixel what it was, so nothing
        that has been looked at on a desktop moves. Button heights are left alone
        because they are touch targets, and shrinking those to win space is how
-       a menu becomes unusable on exactly the devices it was shrunk for. */
-    const headerBottom = top + HEADER_H;   // stars line, plus the controls hint
-    const tail = 50;                       // difficulty row and its blurb
-    const natural = 58 + 58 + 62;
-    const s = Math.max(0.62, Math.min(1, (h - headerBottom - tail - 12) / natural));
-    const gButton = Math.round(58 * s);
-    const gSection = Math.round(62 * s);
+       a menu becomes unusable on exactly the devices it was shrunk for.
 
+       ── AND IT STILL OVERLAPPED, at both of the sizes this file argues about
+       A scale factor with a floor of 0.62 does not say anything about whether
+       the parts fit; it only says how hard it tried. Rendering the menu at
+       820x420 and at 812x375 with the save-code row still on it showed the row
+       drawn THROUGH the bottom of the difficulty tabs at both — 7px at one,
+       10px at the other — which is the same defect this document already
+       records as fixed, and it is the dangerous direction: hit() takes the
+       LAST matching region, so a press aimed at DIFFICULTY armed RESET
+       PROGRESS.
+
+       The gaps are now interpolated between what they WANT to be and the
+       smallest that keep two parts apart, against the space actually
+       available — solved at the top of this function, before the header is
+       placed. Nothing can overlap, because the minimum is the height of the
+       part above it; nothing can run off the bottom, because the budget is
+       measured from the bottom. On anything over about 640 tall the gaps sit
+       at their natural values and the desktop layout is unmoved, pixel for
+       pixel. */
     const bw = 240, bx = cx - bw / 2;
-    let by = h * 0.44;
-    // Pull the stack up if it would otherwise run off the bottom, but never up
-    // into the header.
-    const maxBy = h - (gButton * 2 + gSection + tail) - 12;
-    if (by > maxBy) by = Math.max(headerBottom + 8, maxBy);
 
     this.button(ctx, bx, by, bw, 46, 'RACE', 'goto', this.EVENTS, { primary: true });
     by += gButton;
     this.button(ctx, bx, by, bw, 42, 'GARAGE', 'goto', this.GARAGE);
 
     // ── players ───────────────────────────────────────────────────────────
-    by += gButton;
+    by += gButton2;
     ctx.save();
     ctx.textAlign = 'center';
     this.section(ctx, 'PLAYERS', cx, by - 16);
@@ -17926,46 +19128,27 @@ BR.Screens = {
                opts[i] === cur, T.YELLOW);
     }
 
-    /* ── save codes and reset progress ─────────────────────────────────────
-       15_Save_System.md open questions 2 and 4, in one row of small, dim
-       controls — they must be findable, not inviting.
+    /* ── settings and credits ──────────────────────────────────────────────
+       11_UI.md has listed both under "Main menu" since its first draft and
+       neither existed. What settings there were lived on the PAUSE card —
+       reachable only from inside a race — plus one auto-accelerate toggle on
+       an undocumented T key, which is the same as not existing.
 
-       COUNTED THROUGH SaveManager.saveTally(), not by walking the events map
-       here. This used to count any event with a truthy `medal`, and 'none' is
-       truthy: drawEvents calls eventRecord() for every event, which CREATES a
-       {medal:'none'} row, so simply opening the event list on a fresh save gave
-       the player eighteen medals and offered to erase them.
+       THE SAVE-CODE ROW MOVED IN THERE with them, and that is the point of
+       putting this row here rather than adding a fourth one. Copying a code
+       out, pasting one in and erasing everything are settings-shelf things, and
+       a menu that grows a row per feature is how the 820x420 overlap above
+       happened in the first place. The region count no longer depends on
+       whether the save has progress in it either, so the menu's focus order is
+       the same eleven controls on every save there has ever been.
 
-       USE A SAVE CODE is always here, including on an empty save — a brand new
-       browser is precisely where somebody needs to bring progress IN, and it is
-       the one case where importing destroys nothing. Copying out and resetting
-       only appear once there is something to copy or lose. */
-    const t = BR.SaveManager.saveTally();
-    const hasProgress = t.stars > 0 || t.medals > 0 || t.pieces > 0;
-
-    /* Pinned near the bottom, but NEVER above the end of the flowed content,
-       and NEVER off the bottom either.
-
-       Bottom-anchoring alone put it straight on top of the difficulty buttons
-       at 820x420 and below — and because hit() takes the last matching region,
-       the reset won: a press aimed at DIFFICULTY armed a destructive control.
-       Taking the max keeps it low on a normal window and clear of everything
-       on a short one.
-
-       THE MAX ALONE WAS NOT ENOUGH, and a render at 820x420 is what showed it:
-       pushing the row down to by + 70 put its bottom edge at 435 on a 420-tall
-       screen, so COPY MY CODE, USE A CODE and RESET PROGRESS were all sliced in
-       half by the edge of the window and none of them could be pressed. Not an
-       overlap this time, an overflow — the same fault turned inside out. The
-       min is the other half of the fix.
-
-       `by` is the difficulty row. Its blurb is the one line here that can be
-       dropped without losing a control, so on a screen too short for both, it
-       is what goes. */
-    const ry = Math.min(Math.max(h - 52, by + 70), h - 30);
+       Flowed under the difficulty tabs, then pushed to the bottom of the
+       screen if there is slack — so a desktop keeps its low, quiet row and a
+       short window keeps its buttons whole. */
+    const ry = Math.min(Math.max(by + g[3], h - 52), h - BOT_PAD - ROW_H);
 
     // The blurb, only if there is honestly room for it between the tabs and
-    // whatever is pinned to the bottom.
+    // the row.
     if (by + 56 <= ry - 6) {
       ctx.save();
       ctx.textAlign = 'center';
@@ -17976,42 +19159,278 @@ BR.Screens = {
       ctx.textAlign = 'left';
     }
 
-    if (hasProgress && this.resetArmed) {
-      this.drawResetConfirm(ctx, w, h, t);
-    } else if (hasProgress) {
-      // Only labelled when the label has somewhere to go: on a short window the
-      // caption would land in the difficulty blurb.
-      if (ry - 13 >= by + 58) {
-        ctx.save();
-        ctx.textAlign = 'center';
-        ctx.font = T.label(10, 600);
-        ctx.fillStyle = 'rgba(240,232,214,0.34)';
-        ctx.fillText('A save code moves progress to another browser', cx, ry - 14);
-        ctx.restore();
-        ctx.textAlign = 'left';
-      }
-      const bw3 = 108, bg3 = 6, x0 = cx - (bw3 * 3 + bg3 * 2) / 2;
-      this.button(ctx, x0, ry, bw3, 24, 'COPY MY CODE',
-                  'saveExport', null, { small: true });
-      this.button(ctx, x0 + bw3 + bg3, ry, bw3, 24, 'USE A CODE',
-                  'saveImport', null, { small: true });
-      this.button(ctx, x0 + (bw3 + bg3) * 2, ry, bw3, 24, 'RESET PROGRESS',
-                  'resetArm', null, { small: true });
-    } else {
-      this.button(ctx, cx - 80, ry, 160, 24, 'USE A SAVE CODE',
-                  'saveImport', null, { small: true });
-    }
+    const bw2 = 132, bg2 = 8, x0 = cx - (bw2 * 2 + bg2) / 2;
+    this.button(ctx, x0, ry, bw2, ROW_H, 'SETTINGS', 'goto', this.SETTINGS,
+                { small: true });
+    this.button(ctx, x0 + bw2 + bg2, ry, bw2, ROW_H, 'CREDITS', 'goto',
+                this.CREDITS, { small: true });
 
+    /* Under the row rather than on top of it. At h - 30 this sat inside the
+       bottom row at every window size, including the desktop one — a warning
+       drawn through a button is a warning nobody reads. */
     if (!BR.SaveManager.storageOk) {
       ctx.save();
       ctx.textAlign = 'center';
       ctx.font = T.label(11, 700);
       ctx.fillStyle = '#ff9d6b';
       ctx.fillText('Storage unavailable — progress will not be saved',
-                   cx, h - 30);
+                   cx, Math.min(h - 14, ry + ROW_H + 4));
       ctx.restore();
       ctx.textAlign = 'left';
     }
+  },
+
+  /* ══ WELCOME ══════════════════════════════════════════════════════════════
+     The first thing a brand new save sees, in place of the menu.
+
+     One question, two answers, and no third state — a first-run screen that
+     can be dismissed WITHOUT answering is a first-run screen that comes back,
+     and this one must never appear twice. Escape counts as the second answer
+     (see back()).
+
+     It is deliberately not a tour, a settings wizard or a name entry. It is
+     the smallest possible fork in front of a player who does not yet know
+     whether they want to be taught, and the expensive half of it — the lessons
+     themselves — is the real first event with a leaflet on it (Coach.js).
+
+     The card is PAPER on a dark screen, not kraft: it is a note that came in
+     the box, and the two buttons under it are the only things on screen. */
+  drawWelcome(ctx, w, h) {
+    const T = BR.Toy;
+    const cx = w / 2;
+    const cw = Math.min(430, w - 28);
+    const x = (w - cw) / 2;
+    const ch = 116;
+
+    /* Measured, not assumed: the logo sticker is wider than its text, and the
+       block has to be centred as a whole or it drifts down a short screen. */
+    let ts = 34;
+    ctx.font = T.label(ts, 800);
+    const need = ctx.measureText('BEDROOM RACERS').width + 44;
+    if (need > w - 24) ts = Math.max(14, Math.floor(ts * (w - 24) / need));
+    const logoH = ts + Math.round(ts * 0.28) * 2;
+
+    const blockH = logoH + 18 + ch + 14 + 44 + 10 + 34;
+    let y = Math.max(10, (h - blockH) / 2);
+
+    T.banner(ctx, 'BEDROOM RACERS', cx, y + logoH / 2,
+             { size: ts, padX: Math.round(ts * 0.55), padY: Math.round(ts * 0.28),
+               fill: T.RED, ink: '#fff2dc', tilt: -0.016 });
+    y += logoH + 18;
+
+    T.card(ctx, x, y, cw, ch, 8, '#e8ddc3', 'paper');
+    ctx.save();
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.font = T.label(15, 800);
+    ctx.fillStyle = T.INK;
+    ctx.fillText('NEW TO THE BOX?', x + 16, y + 14, cw - 32);
+    ctx.font = T.label(12, 600);
+    ctx.fillStyle = 'rgba(44,34,25,0.76)';
+    ctx.fillText('The first race can show you what the buttons are for,',
+                 x + 16, y + 40, cw - 32);
+    ctx.fillText('one at a time, as the rug asks for them.',
+                 x + 16, y + 58, cw - 32);
+    ctx.fillStyle = 'rgba(44,34,25,0.55)';
+    ctx.fillText('It is a real event. Real rivals, real stars, and you can',
+                 x + 16, y + 80, cw - 32);
+    ctx.fillText('stop the lessons whenever you like.', x + 16, y + 94, cw - 32);
+    ctx.restore();
+    y += ch + 14;
+
+    const bw = Math.min(260, cw);
+    this.button(ctx, cx - bw / 2, y, bw, 44, 'SHOW ME HOW', 'coachStart', null,
+                { primary: true });
+    y += 54;
+    this.button(ctx, cx - bw / 2, y, bw, 34, 'I WILL WORK IT OUT',
+                'coachDecline', null, { small: true });
+  },
+
+  /* ══ SETTINGS ═════════════════════════════════════════════════════════════
+     11_UI.md listed this on the main menu from the first draft and it was
+     never built. Everything it holds already existed and none of it could be
+     found: the volumes and the display toggles were on the PAUSE card, which
+     means inside a race; auto-accelerate was on the T key and written down
+     nowhere; the save codes and RESET PROGRESS were a row of small buttons on
+     the menu that also overlapped the difficulty tabs on a short screen.
+
+     ── TWO SHAPES, AND THE SHORT ONE IS NOT A SQUASHED TALL ONE ──────────────
+     The same conclusion the event rows reached. One column reads better and is
+     what a phone in portrait gets, because a portrait phone has height to
+     spare. A screen too short for the column — a laptop window, a phone in
+     landscape — gets two columns rather than shrunk controls, because these
+     are touch targets and the one thing that must not shrink is the thing you
+     are aiming at.
+
+     The threshold is measured, not guessed: the single column needs about 470
+     pixels of height including the BACK button, so that is where it switches.
+
+     DIFFICULTY IS NOT HERE. It stays on the menu, where 11_UI.md put it under
+     accessibility rather than options — it changes what a medal is worth, and
+     it belongs next to the RACE button rather than behind another press. */
+  drawSettings(ctx, w, h) {
+    const T = BR.Toy;
+    const roomy = h >= 470;
+    const two = !roomy && w >= 460;
+    const panelW = Math.min(two ? 600 : 380, w - 32);
+    const x = (w - panelW) / 2;
+    const top = Math.max(18, h * 0.07);
+
+    this.title(ctx, 'SETTINGS', x, top);
+
+    const colW = two ? Math.floor((panelW - 20) / 2) : panelW;
+    const colBX = two ? x + colW + 20 : x;
+    const cy0 = top + 46;
+
+    // ── column one: what you hear, and how the car answers ────────────────
+    let y = cy0;
+    this.section(ctx, 'SOUND', x, y - 13);
+    y = this.volSlider(ctx, x, y, colW, 'SFX', BR.Audio.sfxVolume, 'sfx');
+    y = this.volSlider(ctx, x, y, colW, 'MUSIC', BR.Audio.musicVolume, 'music');
+
+    y += 20;
+    this.section(ctx, 'DRIVING', x, y - 13);
+    this.button(ctx, x, y, colW, 30, 'AUTO-ACCELERATE  ' +
+                (BR.Input.autoAccelerate ? 'ON' : 'OFF'), 'autoAccel', null);
+    y += 36;
+
+    ctx.save();
+    ctx.textAlign = 'left';
+    ctx.font = T.label(10, 600);
+    ctx.fillStyle = 'rgba(240,232,214,0.40)';
+    ctx.fillText('On by default. The T key does the same thing mid-race.',
+                 x, y, colW);
+    /* The control line, in one more place you can go and look. In-race it
+       fades after a couple of seconds, which is right for a countdown and no
+       use at all to somebody who has forgotten which key drifts. */
+    const line = BR.Touch && BR.Touch.capable
+      ? 'ON-SCREEN CONTROLS  ·  tap and hold'
+      : (BR.Input.padFor(0) ? BR.Input.PAD_LABEL : BR.Input.LABELS.solo);
+    ctx.fillStyle = 'rgba(240,232,214,0.55)';
+    ctx.font = T.label(10, 700);
+    ctx.fillText(line, x, y + 17, colW);
+    ctx.restore();
+    y += 38;
+    const colABottom = y;
+
+    // ── column two: what you see, the lessons, and the save ───────────────
+    y = two ? cy0 : colABottom + 26;
+    this.section(ctx, 'DISPLAY', colBX, y - 13);
+    const halfW = (colW - 8) / 2;
+    this.button(ctx, colBX, y, halfW, 30,
+                'MAP  ' + (BR.MiniMap.size > 0 ? 'ON' : 'OFF'), 'toggleMap', null);
+    this.button(ctx, colBX + halfW + 8, y, halfW, 30,
+                'CORNERS  ' + (BR.CornerHint.size > 0 ? 'ON' : 'OFF'),
+                'toggleCorners', null);
+    y += 50;
+
+    this.section(ctx, 'LEARNING', colBX, y - 13);
+    this.button(ctx, colBX, y, colW, 30, 'SHOW THE LESSONS AGAIN',
+                'coachStart', null);
+    y += 50;
+
+    /* ── save codes and reset progress, moved here from the menu ───────────
+       15_Save_System.md open questions 2 and 4. Findable, not inviting — the
+       same intent as before, in the place a player now goes looking for it.
+
+       COUNTED THROUGH SaveManager.saveTally(), not by walking the events map:
+       eventRecord() CREATES a {medal:'none'} row for every event the list
+       draws, and 'none' is truthy, so counting medals here gave a fresh save
+       eighteen of them and offered to erase them.
+
+       USE A SAVE CODE is always here, including on an empty save — a brand new
+       browser is exactly where somebody needs to bring progress IN, and it is
+       the one case where importing destroys nothing. */
+    const t = BR.SaveManager.saveTally();
+    const hasProgress = t.stars > 0 || t.medals > 0 || t.pieces > 0;
+
+    this.section(ctx, 'SAVE', colBX, y - 13);
+    if (hasProgress) {
+      this.button(ctx, colBX, y, halfW, 26, 'COPY MY CODE', 'saveExport', null,
+                  { small: true });
+      this.button(ctx, colBX + halfW + 8, y, halfW, 26, 'USE A CODE',
+                  'saveImport', null, { small: true });
+      y += 32;
+      this.button(ctx, colBX, y, colW, 26, 'RESET PROGRESS', 'resetArm', null,
+                  { small: true });
+      y += 32;
+    } else {
+      this.button(ctx, colBX, y, colW, 26, 'USE A SAVE CODE', 'saveImport',
+                  null, { small: true });
+      y += 32;
+    }
+
+    ctx.save();
+    ctx.textAlign = 'left';
+    ctx.font = T.label(10, 600);
+    ctx.fillStyle = 'rgba(240,232,214,0.34)';
+    ctx.fillText('A save code moves progress to another browser.', colBX, y,
+                 colW);
+    ctx.restore();
+
+    const contentBottom = Math.max(colABottom, y + 16);
+    const by = Math.min(contentBottom + 18, h - 44);
+    this.button(ctx, x, by, 120, 36, '← BACK', 'goto', this.MENU);
+
+    if (!BR.SaveManager.storageOk) {
+      ctx.save();
+      ctx.textAlign = 'right';
+      ctx.font = T.label(11, 700);
+      ctx.fillStyle = '#ff9d6b';
+      ctx.fillText('Storage unavailable — nothing here is being saved',
+                   x + panelW, by + 12);
+      ctx.restore();
+      ctx.textAlign = 'left';
+    }
+
+    // Drawn over the top, last, so its two buttons win the hit test — the same
+    // arrangement the menu used when the reset lived there.
+    if (hasProgress && this.resetArmed) this.drawResetConfirm(ctx, w, h, t);
+  },
+
+  /* ══ CREDITS ══════════════════════════════════════════════════════════════
+     Short, and in the game's own voice rather than a film crawl. A game about
+     toys in a bedroom should not credit itself like a studio picture. */
+  drawCredits(ctx, w, h) {
+    const T = BR.Toy;
+    const cx = w / 2;
+    const cw = Math.min(430, w - 28);
+    const x = (w - cw) / 2;
+    const ch = 190;
+    const y = Math.max(52, (h - ch) / 2 - 10);
+
+    this.title(ctx, 'CREDITS', x, Math.max(14, y - 46));
+
+    T.card(ctx, x, y, cw, ch, 8, '#e8ddc3', 'paper');
+
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.font = T.label(17, 800);
+    ctx.fillStyle = T.INK;
+    ctx.fillText('BEDROOM RACERS', cx, y + 16, cw - 32);
+
+    ctx.font = T.label(12, 700);
+    ctx.fillStyle = 'rgba(44,34,25,0.80)';
+    ctx.fillText('Made by Dumb-Tony, with Claude.', cx, y + 44, cw - 32);
+
+    ctx.font = T.label(11, 600);
+    ctx.fillStyle = 'rgba(44,34,25,0.62)';
+    ctx.fillText('No engine, no toolchain, no build step —', cx, y + 74, cw - 32);
+    ctx.fillText('scripts in a page and a canvas to draw on.', cx, y + 90, cw - 32);
+    ctx.fillText('Twelve tracks, six worlds, twenty-six events,', cx, y + 112, cw - 32);
+    ctx.fillText('and a rug that does not forgive.', cx, y + 128, cw - 32);
+    ctx.restore();
+
+    // The tagline gets the sticker, because it is the one line that is the
+    // game rather than about it.
+    T.banner(ctx, 'The toys race when nobody is watching', cx, y + ch - 22,
+             { size: 11, padX: 12, padY: 6, fill: T.YELLOW, tilt: -0.02 });
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+
+    const by = Math.min(Math.max(y + ch + 16, h - 52), h - 44);
+    this.button(ctx, x, by, 120, 36, '← BACK', 'goto', this.MENU);
   },
 
   /* ── the armed reset ──────────────────────────────────────────────────────
@@ -18057,7 +19476,7 @@ BR.Screens = {
     this.button(ctx, w / 2 - bw - 6, y + ch - 44, bw, 30, 'YES, ERASE IT ALL',
                 'resetConfirm', null, { small: true, danger: true });
     this.button(ctx, w / 2 + 6, y + ch - 44, bw, 30, 'KEEP MY PROGRESS',
-                'goto', this.MENU, { small: true });
+                'goto', this.SETTINGS, { small: true });
   },
 
   /* A latching tab — one of a row where exactly one is down. The chosen one is
@@ -18648,7 +20067,12 @@ BR.Game = {
     this.event = BR.EVENTS[0];
     this.buildRace();
     BR.Screens.init(document.getElementById('game'));
-    BR.Screens.set(BR.Screens.MENU);
+    /* First run opens on the welcome card instead of the menu — see
+       src/ui/Coach.js for the flag and why it is a setting. Everything else
+       about booting is unchanged, and a seat that has been taught goes
+       straight to the menu exactly as before. */
+    BR.Screens.set(BR.Coach && !BR.Coach.taught()
+      ? BR.Screens.WELCOME : BR.Screens.MENU);
 
     // Development tooling only — absent from the shipped bundle.
     if (BR.Debug) BR.Debug.init(this);
@@ -19079,6 +20503,15 @@ BR.Game = {
        over the top of them rather than the other way round — a thumb pad
        floating above a paused game reads as still being live. */
     BR.Touch.draw(BR.Renderer.ctx, BR.Renderer.w, BR.Renderer.h);
+    /* The first-run lessons (src/ui/Coach.js). Render-only and solo-only: it
+       reads the vehicle and the race manager and writes nothing but its own
+       state, so no target time moves. It sits AFTER the touch pads, which it
+       has to clear on a phone, and BEFORE the screens layer, so the pause card
+       covers it. */
+    if (BR.Coach) {
+      BR.Coach.update(this, dt);
+      BR.Coach.draw(BR.Renderer.ctx, BR.Renderer.w, BR.Renderer.h, dt);
+    }
     BR.Screens.draw(BR.Renderer.ctx, BR.Renderer.w, BR.Renderer.h, dt);
 
     // Once per RENDERED frame, never from inside the fixed step — see Audio.js.
@@ -19236,12 +20669,40 @@ BR.Game = {
       }
     }
 
-    // Marks and dust for every human — an opponent's slide is not the
-    // player's business, but the other player's certainly is.
+    /* Marks and dust for EVERY car, not just the humans.
+       It used to be humans only, on the reasoning that "an opponent's slide is
+       not the player's business". That is wrong in a racing game: a rival
+       sliding wide ahead of you is the clearest possible warning that the
+       corner is tighter than it looks, and their trail through a sandpit shows
+       you the line somebody else already packed down. Opponents emit at a lower
+       rate so eight cars cannot flush the pool in a corner.
+
+       Landing and impact are edge-detected HERE, off state the vehicle already
+       keeps, for the same reason Audio does it: this runs once per fixed tick,
+       and reading a boolean per sub-step would fire several times for one
+       event. */
     for (let i = 0; i < this.racers.length; i++) {
-      if (this.racers[i].isPlayer) {
-        BR.Particles.emitForVehicle(this.racers[i].vehicle, dt);
+      const r = this.racers[i];
+      const v = r.vehicle;
+      BR.Particles.emitForVehicle(v, dt, !!r.isPlayer);
+
+      const air = !v.grounded && !v.rail && !v.falling;
+      if (v._fxAir && !air && v.grounded) {
+        // Came down. Force from how far it fell, not from speed — a long flat
+        // jump should not thump like a drop off the dresser.
+        const drop = BR.M.clamp((v._fxPeak || 0) / 120, 0, 1);
+        if (drop > 0.08) BR.Particles.landing(v, drop);
+        v._fxPeak = 0;
       }
+      if (air) v._fxPeak = Math.max(v._fxPeak || 0, v.z || 0);
+      v._fxAir = air;
+
+      const hits = v.impacts || 0;
+      if (v._fxHits === undefined) v._fxHits = hits;
+      if (hits > v._fxHits) {
+        BR.Particles.impact(v, BR.M.clamp(v.lastImpact || 0.5, 0, 1));
+      }
+      v._fxHits = hits;
     }
   },
 
