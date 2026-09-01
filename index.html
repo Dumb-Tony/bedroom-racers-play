@@ -9489,6 +9489,23 @@ BR.SaveManager = {
         mapSize: 0.82,
         cornerHint: 1,
 
+        /* ── ACCESSIBILITY ──────────────────────────────────────────────────
+           11_UI.md lists these as "not optional, and not deferred", several of
+           them load-bearing for the 8+ audience this game is aimed at.
+
+           `cameraRotation` clamps how much of the world's turn the camera
+           follows: 1 is the game as designed, 0 holds a fixed bearing. The
+           chase camera rotates the entire world around the car, which the doc
+           names as a known motion-sickness trigger and harder for younger
+           players to parse — and it is genuinely one number, because the
+           projection already takes yaw as a parameter.
+
+           `markShapes` stops opponent identity resting on colour alone. Every
+           car here is NAMED for its colour — Red Racer, Blue Buggy — so the
+           minimap is exactly where that assumption bites. */
+        cameraRotation: 1,
+        markShapes: false,
+
         /* Has this seat been shown how to play (src/ui/Coach.js). A SETTING,
            not progress, and deliberately: reset() keeps settings and import
            keeps this device's, so wiping your stars or pasting in a save code
@@ -11265,6 +11282,29 @@ BR.Renderer = {
       // Crawling, stopped, or reversing. Velocity direction is noise here, and
       // reversing would otherwise whip the camera through 180 degrees.
       targetYaw = v.heading;
+    }
+
+    /* ── REDUCED CAMERA ROTATION (11_UI.md accessibility) ───────────────────
+       The chase camera turns the whole world around the car. 11_UI.md names
+       that as a known motion-sickness trigger and harder for younger players to
+       parse, and asks for an option that "clamps or disables yaw rotation,
+       falling back toward a fixed-orientation view".
+
+       It really is one number. The target is blended toward a FIXED bearing
+       rather than the yaw rate being slowed, because slowing the rate does not
+       reduce rotation — it only makes the same rotation arrive late, which is
+       worse for both parsing and nausea. At 0 the world holds still and the car
+       turns within the frame, which is the top-down reading a rotating chase
+       view denies you.
+
+       `_fixedYaw` is the bearing it settles to: the direction the car was
+       facing when the race began, so a track's opening straight still runs up
+       the screen rather than off to one side. */
+    const rot = this.cameraRotation === undefined ? 1 : this.cameraRotation;
+    if (cam._fixedYaw === undefined) cam._fixedYaw = targetYaw;
+    if (rot < 1) {
+      const toFixed = M.wrapAngle(cam._fixedYaw - targetYaw);
+      targetYaw = targetYaw + toFixed * (1 - rot);
     }
 
     const dYaw = M.wrapAngle(targetYaw - cam.yaw);
@@ -13643,9 +13683,32 @@ BR.Renderer = {
     const o = arena.outer, ip = arena.inner, n = o.length;
     const SKIRT = 26;
 
+    /* ── CULLED, WHICH IT NEVER WAS ─────────────────────────────────────────
+       The flat road has been culled since view culling was added — `roadRuns`
+       walks the outline and returns only the visible spans. This branch never
+       got the same treatment, so an elevated track drew EVERY segment of the
+       whole circuit on every frame, including all the road behind the car, and
+       paid three quads and a sort for each one.
+
+       That is why the elevated tracks cost roughly double the flat ones:
+       measured before this, Shelf Run 12,112 operations a frame against Rug
+       Loop's 5,717, with 4,184 of it here. Each segment is two skirt quads and
+       a deck quad at about nine operations apiece, so a segment nobody can see
+       costs twenty-seven to draw and five projections to reject.
+
+       Both edges at both ends, plus the floor beneath, because a deck can be
+       off screen while the pillar holding it up is not. */
+    const B = this.cullBounds;
+    const doCull = !!(B && B.on);
     const segs = [];
     for (let i = 0; i < n; i++) {
       const j = (i + 1) % n;
+      if (doCull &&
+          !this.onScreen(o[i][0],  o[i][1],  o[i][2]) &&
+          !this.onScreen(ip[i][0], ip[i][1], ip[i][2]) &&
+          !this.onScreen(o[j][0],  o[j][1],  o[j][2]) &&
+          !this.onScreen(ip[j][0], ip[j][1], ip[j][2]) &&
+          !this.onScreen(o[i][0],  o[i][1],  0)) continue;
       segs.push({ i: i, j: j,
                   key: Math.max(Pj.depthAt(o[i][0], o[i][1]),
                                 Pj.depthAt(ip[j][0], ip[j][1])) });
@@ -17004,6 +17067,50 @@ BR.MiniMap = {
     return { x: f.cx + (x - f.wx) * f.scale, y: f.cy + (y - f.wy) * f.scale };
   },
 
+  /** Whether opponent markers carry a shape as well as a colour. */
+  markShapes: false,
+
+  /**
+   * A distinguishable marker path for opponent `n`, centred on x,y.
+   *
+   * Five shapes, chosen to differ in SILHOUETTE rather than in detail: at four
+   * pixels on a minimap, an outline is a blob and only the gross shape reads.
+   * Circle, square, triangle, diamond, then a wide bar — each has a different
+   * ratio of width to height and a different number of corners, which survives
+   * being two pixels across in a way that "a slightly different rounded thing"
+   * does not. Beyond five it wraps, and by then the grid is full anyway.
+   *
+   * Leaves the path open for the caller to fill and stroke, exactly as the
+   * plain `arc` it replaces did.
+   */
+  marker(ctx, x, y, r, n) {
+    ctx.beginPath();
+    switch (n % 5) {
+      case 0:
+        ctx.arc(x, y, r * 0.9, 0, Math.PI * 2);
+        break;
+      case 1:
+        ctx.rect(x - r * 0.8, y - r * 0.8, r * 1.6, r * 1.6);
+        break;
+      case 2:
+        ctx.moveTo(x, y - r);
+        ctx.lineTo(x + r, y + r * 0.8);
+        ctx.lineTo(x - r, y + r * 0.8);
+        ctx.closePath();
+        break;
+      case 3:
+        ctx.moveTo(x, y - r * 1.1);
+        ctx.lineTo(x + r * 1.1, y);
+        ctx.lineTo(x, y + r * 1.1);
+        ctx.lineTo(x - r * 1.1, y);
+        ctx.closePath();
+        break;
+      default:
+        ctx.rect(x - r * 1.25, y - r * 0.55, r * 2.5, r * 1.1);
+        break;
+    }
+  },
+
   draw(ctx, game, view, w, h) {
     if (this.size <= 0.01) return;
     const track = game.arena;
@@ -17110,12 +17217,24 @@ BR.MiniMap = {
     // In their own body colours, so identifying a car on the map matches
     // identifying it on the track.
     const self = view.vehicle;
+    let shapeIdx = 0;
     for (let i = 0; i < game.vehicles.length; i++) {
       const v = game.vehicles[i];
       if (v === self) continue;
       const p = this.toMap(v.x, v.y);
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, 3.6, 0, Math.PI * 2);
+
+      /* SHAPE AS WELL AS COLOUR, when asked for. 11_UI.md: "Never rely on
+         colour alone for position indicators or opponent identification; pair
+         with shape or number." It matters more here than in most games, because
+         every car in this one is NAMED for its colour — Red Racer, Green
+         Pickup — so to a red-green colourblind player they are two identical
+         dots, on the one display whose entire job is telling you who is where.
+
+         Off by default: plain dots read more cleanly when colour does work, so
+         this is a preference rather than a correction applied to everybody. */
+      if (this.markShapes) this.marker(ctx, p.x, p.y, 4.0, shapeIdx++);
+      else { ctx.beginPath(); ctx.arc(p.x, p.y, 3.6, 0, Math.PI * 2); }
+
       ctx.fillStyle = v.spec.colorTop;
       ctx.fill();
       ctx.strokeStyle = 'rgba(0,0,0,0.5)';
@@ -18284,6 +18403,30 @@ BR.Screens = {
         BR.SaveManager.save();
         BR.Audio.checkpoint();
         break;
+      /* ── accessibility (11_UI.md) ─────────────────────────────────────────
+         Three steps rather than a slider, because the useful answers are "as
+         designed", "less of it" and "none": a continuous control here invites
+         hunting for a value, and the measurement says the middle is not even
+         proportional — full rotation travels 598 degrees of yaw over forty
+         seconds, half travels 498, and off travels none. */
+      case 'camRot': {
+        const st = BR.SaveManager.get().settings;
+        const now = st.cameraRotation === undefined ? 1 : st.cameraRotation;
+        const next = now === 1 ? 0.5 : (now === 0.5 ? 0 : 1);
+        st.cameraRotation = next;
+        BR.Renderer.cameraRotation = next;
+        BR.SaveManager.save();
+        BR.Audio.checkpoint();
+        break;
+      }
+      case 'markShapes': {
+        const st = BR.SaveManager.get().settings;
+        st.markShapes = !st.markShapes;
+        BR.MiniMap.markShapes = st.markShapes;
+        BR.SaveManager.save();
+        BR.Audio.checkpoint();
+        break;
+      }
       /* ── reset progress ──────────────────────────────────────────────────
          15_Save_System.md open question 4: "probably yes, in settings, with
          confirmation."
@@ -19294,6 +19437,27 @@ BR.Screens = {
                 (BR.Input.autoAccelerate ? 'ON' : 'OFF'), 'autoAccel', null);
     y += 36;
 
+    /* ── accessibility ─────────────────────────────────────────────────────
+       11_UI.md calls these "not optional, and not deferred", and several
+       load-bearing for the 8+ audience. Two of the list are here now.
+
+       Camera rotation matters most: the chase camera turns the entire world
+       around the car, which that doc names as a known motion-sickness trigger
+       and harder for younger players to read. Colour marks matter more in this
+       game than in most, because every car is NAMED for its colour. */
+    const camRot = (function () {
+      const s = BR.SaveManager.get().settings.cameraRotation;
+      return s === undefined ? 1 : s;
+    })();
+    this.button(ctx, x, y, colW, 30, 'CAMERA ROTATION  ' +
+                (camRot === 1 ? 'FULL' : camRot === 0.5 ? 'REDUCED' : 'FIXED'),
+                'camRot', null);
+    y += 36;
+    this.button(ctx, x, y, colW, 30, 'SHAPES ON THE MAP  ' +
+                (BR.SaveManager.get().settings.markShapes ? 'ON' : 'OFF'),
+                'markShapes', null);
+    y += 36;
+
     ctx.save();
     ctx.textAlign = 'left';
     ctx.font = T.label(10, 600);
@@ -19418,7 +19582,27 @@ BR.Screens = {
     ctx.fillStyle = 'rgba(44,34,25,0.62)';
     ctx.fillText('No engine, no toolchain, no build step —', cx, y + 74, cw - 32);
     ctx.fillText('scripts in a page and a canvas to draw on.', cx, y + 90, cw - 32);
-    ctx.fillText('Twelve tracks, six worlds, twenty-six events,', cx, y + 112, cw - 32);
+    /* COUNTED, NOT WRITTEN DOWN. This read "Twelve tracks, six worlds,
+       twenty-six events" as literal text — true the day it was typed, and
+       exactly the kind of line that quietly stops being true. The published
+       page header had already drifted the same way twice, still advertising
+       eight tracks and four worlds long after there were ten and five. A
+       credits screen that lies about its own game is worse than one that says
+       nothing. */
+    const nTracks = Object.keys(BR.TRACKS || {}).length;
+    const nEvents = (BR.EVENTS || []).length;
+    const seenWorlds = {};
+    for (const tid in (BR.TRACKS || {})) {
+      const w = BR.TRACKS[tid] && BR.TRACKS[tid].world;
+      if (w) seenWorlds[w] = 1;
+    }
+    /* +1 because Bedside Boulevard carries world 'town-rug' while the project
+       has always counted it as a place of its own — 11_UI.md and 18_Roadmap.md
+       both describe the pre-kitchen game as "fourteen events across four
+       worlds" when there were three `world` values. */
+    const nWorlds = Object.keys(seenWorlds).length + 1;
+    ctx.fillText(nTracks + ' tracks, ' + nWorlds + ' worlds, ' + nEvents +
+                 ' events,', cx, y + 112, cw - 32);
     ctx.fillText('and a rug that does not forgive.', cx, y + 128, cw - 32);
     ctx.restore();
 
@@ -20038,6 +20222,12 @@ BR.Game = {
     BR.Audio.musicVolume = save.settings.musicVolume;
     BR.Input.autoAccelerate = save.settings.autoAccelerate;
     if (BR.MiniMap) BR.MiniMap.size = save.settings.mapSize;
+    // Accessibility settings live on the renderer, which is where they are read
+    // every frame — see the note on `cameraRotation` in SaveManager.
+    if (save.settings.cameraRotation !== undefined) {
+      BR.Renderer.cameraRotation = save.settings.cameraRotation;
+    }
+    if (BR.MiniMap) BR.MiniMap.markShapes = !!save.settings.markShapes;
     if (BR.CornerHint && save.settings.cornerHint !== undefined) {
       BR.CornerHint.size = save.settings.cornerHint;
     }
